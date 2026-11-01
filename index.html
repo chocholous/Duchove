@@ -357,6 +357,24 @@
   @keyframes develop { from { opacity: 0; filter: brightness(2.2) blur(6px); } to { opacity: 1; filter: none; } }
   .photobtns { display: flex; gap: 10px; justify-content: center; opacity: 0; animation: rise 1s ease-out 1.6s forwards; }
   .reveal .photobtns .btn { width: auto; min-width: 92px; padding: 14px 22px; opacity: 1; animation: none; }
+  /* popisky pod ikonami, řádek „Co teď“, kroky po nálezu, galerie */
+  .btn .lbl { display: block; margin-top: 4px; font: 600 10px/1.1 var(--label, var(--mono)); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+  .btn.primary .lbl { color: inherit; opacity: .85; }
+  .btn:has(.lbl) { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .now { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: rgba(201, 164, 106, .08); border: 1px solid rgba(201, 164, 106, .25); color: #efe4cf; font: 500 17px/1.25 var(--serif); min-height: 46px; }
+  .now .ms { font-size: 26px; color: var(--ember); flex: none; }
+  .now.hot { background: rgba(192, 82, 74, .14); border-color: rgba(192, 82, 74, .55); animation: breathe 1.4s ease-in-out infinite; }
+  .rsteps { margin: 0; padding: 0 0 0 1.4em; text-align: left; color: var(--dim); font: 500 16px/1.5 var(--serif); }
+  .rsteps li.done { color: var(--faint); text-decoration: line-through; }
+  .rsteps li.cur { color: var(--fg); }
+  .ghint { margin: 0; text-align: center; font: italic 500 20px/1.3 var(--serif); color: #efe4cf; text-shadow: 0 1px 8px #000; }
+  .gallerybox .overlay-in { gap: 14px; }
+  .ggrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .ggrid img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 1px rgba(216, 214, 203, .14); cursor: pointer; }
+  .gempty { color: var(--dim); }
+  .viewer { position: fixed; inset: 0; z-index: 45; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px)); }
+  .viewer img { max-width: 100%; max-height: 78vh; object-fit: contain; border-radius: 4px; }
+  .vbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: min(100%, 420px); }
   /* Duchokamera: živý obraz, šum, rámeček a šipky; nad zrnem a vinětací */
   .gcam { position: fixed; inset: 0; z-index: 40; background: #000; overflow: hidden; }
   .gcam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(.65) sepia(.25) hue-rotate(85deg) contrast(1.25) brightness(.72); }
@@ -459,6 +477,7 @@
     </div>
     <div class="right">
       <div class="timeleft lcd" id="time">0:00</div>
+      <button class="gear" id="help" type="button" aria-label="Co mám dělat?" title="Co mám dělat?"><span class="ms" aria-hidden="true">help</span></button>
       <button class="gear" id="menu" type="button" aria-label="Nastavení" title="Nastavení" aria-expanded="false" aria-controls="sheet"><span class="ms" aria-hidden="true">settings</span></button>
     </div>
   </header>
@@ -514,8 +533,9 @@
     <p class="dirhint" id="dirhint"></p>
   </div>
 
+  <div class="now" id="now" aria-live="polite"><span class="ms" id="nowic" aria-hidden="true">hourglass_top</span><span id="nowtx"></span></div>
   <div class="ctl">
-    <button class="btn primary" id="catch" type="button" disabled aria-label="Chyť strašidlo" title="Chyť strašidlo"><span class="ms" aria-hidden="true">back_hand</span></button>
+    <button class="btn primary" id="catch" type="button" disabled aria-label="Chyť strašidlo" title="Chyť strašidlo"><span class="ms" aria-hidden="true">back_hand</span><span class="lbl" aria-hidden="true">Chytit</span></button>
   </div>
   <div class="testbar" id="testbar" hidden>
     <button class="btn" id="tl" type="button" aria-label="Otočit doleva" title="Otočit doleva"><span class="ms" aria-hidden="true">rotate_left</span></button>
@@ -552,14 +572,15 @@
     <div class="note" id="ioshint" hidden><b>Přes celou obrazovku</b><span>Na iPhonu ťukni na Sdílet a pak Přidat na plochu. Detektor se pak otevře jako aplikace bez lišt prohlížeče.</span></div>
     <div class="btns">
       <div class="modes">
-        <button class="btn primary" id="begin" type="button" aria-label="Hledat pěšky" title="Hledat pěšky"><span class="ms" aria-hidden="true">directions_walk</span></button>
-        <button class="btn primary" id="carbtn" type="button" aria-label="Hledat z auta" title="Hledat z auta"><span class="ms" aria-hidden="true">directions_car</span></button>
+        <button class="btn primary" id="begin" type="button" aria-label="Hledat pěšky" title="Hledat pěšky"><span class="ms" aria-hidden="true">directions_walk</span><span class="lbl" aria-hidden="true">Pěšky</span></button>
+        <button class="btn primary" id="carbtn" type="button" aria-label="Hledat z auta" title="Hledat z auta"><span class="ms" aria-hidden="true">directions_car</span><span class="lbl" aria-hidden="true">Z auta</span></button>
       </div>
       <div class="btnrow secondary">
-        <button class="btn" id="resume" type="button" hidden aria-label="Pokračovat v rozehrané hře" title="Pokračovat v rozehrané hře"><span class="ms" aria-hidden="true">resume</span></button>
-        <button class="btn" id="testbtn" type="button" aria-label="Zkouška doma bez GPS" title="Zkouška doma bez GPS"><span class="ms" aria-hidden="true">home</span></button>
-        <button class="btn" id="sndtest" type="button" aria-label="Test zvuku" title="Test zvuku"><span class="ms" aria-hidden="true">hearing</span></button>
-        <button class="btn" id="introsettings" type="button" aria-label="Nastavení: zvuk, lekačky, vibrace" title="Nastavení"><span class="ms" aria-hidden="true">settings</span></button>
+        <button class="btn" id="resume" type="button" hidden aria-label="Pokračovat v rozehrané hře" title="Pokračovat v rozehrané hře"><span class="ms" aria-hidden="true">resume</span><span class="lbl" aria-hidden="true">Pokračovat</span></button>
+        <button class="btn" id="testbtn" type="button" aria-label="Zkouška doma bez GPS" title="Zkouška doma bez GPS"><span class="ms" aria-hidden="true">home</span><span class="lbl" aria-hidden="true">Zkouška doma</span></button>
+        <button class="btn" id="sndtest" type="button" aria-label="Test zvuku" title="Test zvuku"><span class="ms" aria-hidden="true">hearing</span><span class="lbl" aria-hidden="true">Test zvuku</span></button>
+        <button class="btn" id="galbtn" type="button" aria-label="Galerie fotek duchů" title="Galerie"><span class="ms" aria-hidden="true">photo_library</span><span class="lbl" aria-hidden="true">Galerie</span></button>
+        <button class="btn" id="introsettings" type="button" aria-label="Nastavení: zvuk, lekačky, vibrace" title="Nastavení"><span class="ms" aria-hidden="true">settings</span><span class="lbl" aria-hidden="true">Nastavení</span></button>
       </div>
       <label class="voicerow" id="voicerow" hidden><span>Hlas</span><select id="voicesel" aria-label="Hlas vypravěče"></select></label>
     </div>
@@ -571,10 +592,11 @@
     <div id="stage"></div>
     <h2 id="rname"></h2>
     <p class="quote" id="rquote"></p>
+    <ol class="rsteps" id="rsteps"><li id="st1">Splňte úkol nahoře.</li><li id="st2">Vyfoťte ducha duchokamerou.</li><li id="st3">Šipkou jděte na dalšího.</li></ol>
     <figure class="photo" id="photo" hidden><img id="photoimg" alt="Fotka místa, kde jste našli ducha"></figure>
     <div class="photobtns" id="photobtns">
-      <button class="btn" id="snap" type="button" aria-label="Vyfotit místo, kde je duch" title="Vyfotit"><span class="ms" aria-hidden="true">photo_camera</span></button>
-      <button class="btn" id="sharephoto" type="button" hidden aria-label="Uložit nebo poslat fotku" title="Uložit nebo poslat"><span class="ms" aria-hidden="true">ios_share</span></button>
+      <button class="btn" id="snap" type="button" aria-label="Vyfotit místo, kde je duch" title="Vyfotit"><span class="ms" aria-hidden="true">photo_camera</span><span class="lbl" aria-hidden="true">Vyfotit ducha</span></button>
+      <button class="btn" id="sharephoto" type="button" hidden aria-label="Uložit nebo poslat fotku" title="Uložit nebo poslat"><span class="ms" aria-hidden="true">ios_share</span><span class="lbl" aria-hidden="true">Uložit do Fotek</span></button>
     </div>
     <input type="file" id="cam" accept="image/*" capture="environment" hidden>
     <div class="score" id="score" aria-hidden="true"></div>
@@ -592,12 +614,31 @@
     <div class="gframe"></div>
   </div>
   <div class="gbottom">
+    <p class="ghint" id="ghint">Otáčej se pomalu dokola.</p>
     <div class="gsigbar"><i id="gsig"></i></div>
     <div class="gbtns">
-      <button class="btn" id="gclose" type="button" aria-label="Zavřít kameru" title="Zavřít"><span class="ms" aria-hidden="true">close</span></button>
-      <button class="btn primary" id="gshot" type="button" aria-label="Vyfotit ducha" title="Vyfotit"><span class="ms" aria-hidden="true">photo_camera</span></button>
+      <button class="btn" id="gclose" type="button" aria-label="Zavřít kameru" title="Zavřít"><span class="ms" aria-hidden="true">close</span><span class="lbl" aria-hidden="true">Zpět</span></button>
+      <button class="btn primary" id="gshot" type="button" aria-label="Vyfotit ducha" title="Vyfotit"><span class="ms" aria-hidden="true">photo_camera</span><span class="lbl" aria-hidden="true">Vyfotit</span></button>
       <span class="gspace"></span>
     </div>
+  </div>
+</section>
+
+<section class="overlay gallerybox" id="gallery" hidden aria-label="Galerie">
+  <div class="overlay-in">
+    <p class="kicker">Galerie</p>
+    <h2>Vyfocení duchové</h2>
+    <p class="gempty" id="gempty">Zatím tu nic není. Po nálezu vyfoťte ducha duchokamerou a fotka se uloží sem.</p>
+    <div class="ggrid" id="ggrid"></div>
+    <button class="btn" id="galclose" type="button" aria-label="Zpět" title="Zpět"><span class="ms" aria-hidden="true">arrow_back</span><span class="lbl" aria-hidden="true">Zpět</span></button>
+  </div>
+</section>
+<section class="viewer" id="viewer" hidden aria-label="Fotka">
+  <img id="vimg" alt="">
+  <div class="vbtns">
+    <button class="btn" id="vclose" type="button" aria-label="Zpět" title="Zpět"><span class="ms" aria-hidden="true">arrow_back</span><span class="lbl" aria-hidden="true">Zpět</span></button>
+    <button class="btn" id="vshare" type="button" aria-label="Uložit do Fotek" title="Uložit"><span class="ms" aria-hidden="true">ios_share</span><span class="lbl" aria-hidden="true">Uložit</span></button>
+    <button class="btn" id="vdel" type="button" aria-label="Smazat" title="Smazat"><span class="ms" aria-hidden="true">delete</span><span class="lbl" aria-hidden="true">Smazat</span></button>
   </div>
 </section>
 
@@ -640,8 +681,8 @@
     { type: "zombie", hoo: 92 }, { type: "zombie", hoo: 110 }, { type: "zombie", hoo: 128 }
   ];
 
-  var ICON_NEXT = '<span class="ms" aria-hidden="true">arrow_forward</span>';
-  var ICON_AGAIN = '<span class="ms" aria-hidden="true">restart_alt</span>';
+  var ICON_NEXT = '<span class="ms" aria-hidden="true">arrow_forward</span><span class="lbl" aria-hidden="true">Dál</span>';
+  var ICON_AGAIN = '<span class="ms" aria-hidden="true">restart_alt</span><span class="lbl" aria-hidden="true">Nová hra</span>';
   function candleSVG(lit) {
     return '<svg class="candle' + (lit ? " lit" : "") + '" viewBox="0 0 20 46" aria-hidden="true">' +
       '<ellipse class="halo" cx="10" cy="10" rx="9" ry="10" fill="rgba(201,164,106,.18)"/>' +
@@ -2000,7 +2041,8 @@
     cancelLater(); state = "reveal"; var c = CHARS[ghosts[i].c], zom = c.type === "zombie";
     revealEl.hidden = false; restartAnims(revealEl);
     stageEl.innerHTML = eyesSVG(zom); stageEl.hidden = false; revealIdx = i;
-    $("#photo").hidden = true; $("#sharephoto").hidden = true; $("#photobtns").hidden = false; $("#snap").hidden = false;
+    $("#photo").hidden = true; $("#sharephoto").hidden = true; $("#photobtns").hidden = false; $("#snap").hidden = false; $("#rsteps").hidden = false; markStep(1);
+    after(9000, function () { if (state === "reveal" && $("#photo").hidden) markStep(2); });
     $("#rname").textContent = "Nalezeno.";
     var clue = clues[i] || anyClue(mode === "car" ? CLUE_CAR : CLUE_ANY), spoken = "Nalezeno. " + clue;
     /* auto: scéna podle místa, u kterého strašidlo sedělo */
@@ -2035,7 +2077,7 @@
     if (mode === "car" && g.place && g.place.name0) return g.place.name0;
     return mode === "walk" && g.t ? TYPE_NAME[g.t] : "Strašidlo";
   }
-  $("#snap").addEventListener("click", function () { openGhostCam(); });
+  $("#snap").addEventListener("click", function () { markStep(2); openGhostCam(); });
   $("#cam").addEventListener("change", function () {
     var f = this.files && this.files[0], i = revealIdx; if (!f || i < 0) return;
     var url = URL.createObjectURL(f), img = new Image();
@@ -2049,6 +2091,7 @@
     img.src = url;
   });
   $("#sharephoto").addEventListener("click", function () {
+    if (lastPhoto) { saveToPhone(lastPhoto.blob, lastPhoto.name); return; }
     if (!lastPhoto) return;
     var name = "duch-" + lastPhoto.name.toLowerCase().replace(/[^a-z0-9áčďéěíňóřšťúůýž]+/g, "-") + ".jpg";
     var file = null; try { file = new File([lastPhoto.blob], name, { type: "image/jpeg" }); } catch (e) {}
@@ -2060,12 +2103,16 @@
      Po nálezu děti otevřou kameru. Duch se schovává v jednom směru kolem nich. Musí se s telefonem točit:
      kamera šumí a šipky ukazují, kam se otočit. Když na něj zamíří a chvíli drží, zjeví se. Občas uhne.
      Vyfotit jde, až když je vidět. Každý duch ve hře vypadá jinak. */
-  var LOOKS = ["pani", "mnich", "prosteradlo", "stin", "orby", "zombie"];
-  var LOOK_NAME = { pani: "Bílá paní", mnich: "Mnich v kápi", prosteradlo: "Malý duch", stin: "Stínový muž", orby: "Bludná světla", zombie: "Chodící mrtvý" };
+  var LOOKS = ["pani", "mnich", "prosteradlo", "stin", "orby", "zombie", "klekanice"];
+  var LOOK_NAME = { pani: "Bílá paní", mnich: "Mnich v kápi", prosteradlo: "Malý duch", stin: "Stínový muž", orby: "Bludná světla", zombie: "Chodící mrtvý", klekanice: "Klekánice" };
+  var DARK_LOOKS = { stin: 1, klekanice: 1 };
   function lookOf(i) {
     var g = ghosts[i];
     if (!g.look) {
       var used = ghosts.map(function (x) { return x.look; }).filter(Boolean), free = LOOKS.filter(function (l) { return used.indexOf(l) < 0; });
+      /* Klekánice přijde v každé hře, nejpozději jako poslední */
+      var leftNoLook = ghosts.filter(function (x) { return !x.look; }).length;
+      if (free.indexOf("klekanice") >= 0 && (leftNoLook <= 1 || Math.random() < 0.3)) { g.look = "klekanice"; save(); return g.look; }
       var zom = (CHARS[g.c] || {}).type === "zombie";
       if (zom && free.indexOf("zombie") >= 0 && Math.random() < 0.6) g.look = "zombie";
       else { var pool = free.length ? free : LOOKS; g.look = pool[Math.floor(Math.random() * pool.length)]; }
@@ -2132,6 +2179,30 @@
         c.fillStyle = g; c.beginPath(); c.arc(o[0], o[1], o[2] * 2.4, 0, Math.PI * 2); c.fill();
         if (!k) { var t = c.createLinearGradient(o[0], o[1], o[0] - 150, o[1] + 170); t.addColorStop(0, "rgba(220,240,232,.45)"); t.addColorStop(1, "rgba(220,240,232,0)"); c.strokeStyle = t; c.lineWidth = 18; c.beginPath(); c.moveTo(o[0], o[1]); c.quadraticCurveTo(o[0] - 40, o[1] + 120, o[0] - 150, o[1] + 170); c.stroke(); }
       });
+    } else if (look === "klekanice") {
+      /* Klekánice: vychrtlá, nepřirozeně vysoká, dlouhé černé vlasy přes obličej, ruce až pod kolena s dlouhými prsty */
+      glow("rgba(0,0,0,.9)", 24);
+      c.fillStyle = lg(20, 640, .95, .2, "52,56,54");
+      c.beginPath(); c.moveTo(178, 120); c.bezierCurveTo(160, 160, 150, 260, 156, 380); c.bezierCurveTo(150, 470, 136, 560, 120, 640); c.lineTo(280, 640); c.bezierCurveTo(264, 560, 250, 470, 244, 380); c.bezierCurveTo(250, 260, 240, 160, 222, 120); c.closePath(); c.fill();
+      c.strokeStyle = "rgba(70,74,72,.95)"; c.lineWidth = 9;
+      [[-1, 166], [1, 234]].forEach(function (a) {
+        var sx = a[1], ex = sx + a[0] * 34;
+        c.lineWidth = 9; c.beginPath(); c.moveTo(sx, 150); c.bezierCurveTo(sx + a[0] * 22, 260, ex, 380, ex, 470); c.stroke();
+        c.lineWidth = 3.5;
+        for (var f = -2; f <= 2; f++) { c.beginPath(); c.moveTo(ex, 468); c.bezierCurveTo(ex + f * 5, 500, ex + f * 9 + a[0] * 4, 530, ex + f * 11 + a[0] * 6, 562); c.stroke(); }
+      });
+      c.shadowBlur = 0; c.save(); c.translate(200, 96); c.rotate(-0.22);
+      var fc = c.createRadialGradient(0, 6, 4, 0, 6, 44); fc.addColorStop(0, "rgba(200,204,198,.95)"); fc.addColorStop(1, "rgba(120,124,120,.85)");
+      c.fillStyle = fc; c.beginPath(); c.ellipse(0, 6, 30, 44, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "rgba(0,0,0,.95)";
+      [[-11, -2], [11, -2]].forEach(function (e) { c.beginPath(); c.ellipse(e[0], e[1], 7, 10, 0, 0, Math.PI * 2); c.fill(); });
+      c.beginPath(); c.ellipse(0, 30, 6, 14, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = "rgba(6,7,7,.95)"; c.lineWidth = 2.6;
+      for (var hs = -36; hs <= 36; hs += 3) {
+        if (Math.abs(hs) < 16 && Math.random() < 0.8) continue;
+        c.beginPath(); c.moveTo(hs * 0.6, -44); c.bezierCurveTo(hs * 1.1, 0, hs * 1.3 + rnd(-4, 4), 60, hs * 1.4 + rnd(-8, 8), 150 + rnd(0, 60)); c.stroke();
+      }
+      c.restore();
     } else {
       /* chodící mrtvý: shrbená postava s nataženýma rukama */
       glow("rgba(170,200,150,.7)", 26); c.fillStyle = lg(60, 640, .8, .1, "168,186,150");
@@ -2148,7 +2219,7 @@
     var sm = document.createElement("canvas"); sm.width = 50; sm.height = 80; var smc = sm.getContext("2d"); smc.imageSmoothingEnabled = true; smc.drawImage(cv, 0, 0, 50, 80);
     c.setTransform(1, 0, 0, 1, 0, 0); c.shadowBlur = 0; c.globalCompositeOperation = "source-over"; c.clearRect(0, 0, 400, 640);
     c.imageSmoothingEnabled = true; c.globalAlpha = 1; c.drawImage(sm, 0, 0, 400, 640);
-    c.globalAlpha = look === "stin" ? 0.7 : 0.5; c.drawImage(sharp, 0, 0);
+    c.globalAlpha = DARK_LOOKS[look] ? 0.75 : 0.5; c.drawImage(sharp, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = "destination-out";
     for (var mb = 0; mb < 70; mb++) {
       var bx = rnd(0, 400), by = rnd(0, 640), br = rnd(18, 70), bg2 = c.createRadialGradient(bx, by, 0, bx, by, br);
@@ -2226,7 +2297,17 @@
       }, rnd(700, 1400));
     }
     var ready = gcam.amt > 0.62;
-    if (ready && !gcam.ready) { gcam.ready = true; gcamEl.classList.add("ready"); bell(196, 0.16, 3); vibe([40, 60, 40]); speak("Teď! Vyfoť ho!", true); }
+    gcam.lunge = gcam.lungeT ? Math.max(0, 1.6 * Math.exp(-(now - gcam.lungeT) / 260) * Math.min(1, (now - gcam.lungeT) / 90)) : 0;
+    var hint = gcam.ready ? "Teď! Zmáčkni foťák!" : delta < -22 ? "Otoč se doleva." : delta > 22 ? "Otoč se doprava." : align > 0.5 ? "Je tam! Drž telefon v klidu…" : "Otáčej se pomalu dokola.";
+    if (gcam.hint !== hint) { gcam.hint = hint; $("#ghint").textContent = hint; }
+    if (ready && !gcam.ready) {
+      gcam.ready = true; gcamEl.classList.add("ready");
+      if (gcam.look === "klekanice" && scareOn && !gcam.lunged) {
+        /* Klekánice se vrhne ke kameře (lekačka, jde vypnout v nastavení) */
+        gcam.lunged = true; gcam.lungeT = now; hush(); scream(); vibe([300, 60, 500]);
+        setTimeout(function () { if (gcam) speak("To byla Klekánice! Rychle, vyfoť ji!", true); }, 1300);
+      } else { bell(196, 0.16, 3); vibe([40, 60, 40]); speak("Teď! Vyfoť ho!", true); }
+    }
     else if (!ready && gcam.ready && gcam.amt < 0.45) { gcam.ready = false; gcamEl.classList.remove("ready"); }
     /* kreslení: šum, duch (s poruchou obrazu), pruhy */
     gc2.clearRect(0, 0, W, H);
@@ -2242,9 +2323,9 @@
   }
   /* duch do obrazu: vodorovně podle odchylky od jeho směru; při poruše se rozpadá na pruhy */
   function drawGhostInto(c, W, H, delta, a, look, glitch) {
-    var sp = sprite(look), h = H * (look === "prosteradlo" ? 0.42 : look === "orby" ? 0.5 : 0.62), w = h * sp.width / sp.height;
+    var sp = sprite(look), h = H * (look === "prosteradlo" ? 0.42 : look === "orby" ? 0.5 : look === "klekanice" ? 0.78 : 0.62) * (gcam && gcam.lunge ? 1 + gcam.lunge : 1), w = h * sp.width / sp.height;
     var x = W / 2 + (delta / HFOV) * W - w / 2, y = H * 0.94 - h + Math.sin(performance.now() / 700) * H * 0.01;
-    c.save(); c.globalAlpha = clamp(a, 0, 1); c.globalCompositeOperation = look === "stin" ? "source-over" : "screen";
+    c.save(); c.globalAlpha = clamp(a, 0, 1); c.globalCompositeOperation = DARK_LOOKS[look] ? "source-over" : "screen";
     if (glitch) {
       var strips = 7;
       for (var s = 0; s < strips; s++) {
@@ -2274,15 +2355,71 @@
     c.font = Math.round(W * 0.022) + "px 'IBM Plex Mono', Menlo, monospace"; c.fillStyle = "rgba(185,214,200,.75)"; c.fillText(stamp, W * 0.045, H - W * 0.037);
     return cv;
   }
-  function finishPhoto(cv, i, label) {
-    cv.toBlob(function (blob) {
-      if (!blob) return;
-      var out = URL.createObjectURL(blob);
-      lastPhoto = { blob: blob, url: out, name: label }; photos[i] = lastPhoto;
-      $("#photoimg").src = out; $("#photo").hidden = false; stageEl.hidden = true; $("#sharephoto").hidden = false;
-      $("#snap").hidden = true;
-    }, "image/jpeg", 0.88);
+  /* fotka: hned se uloží do galerie v aplikaci a do telefonu (Android stáhne do galerie, iPhone otevře Uložit obrázek);
+     vše synchronně ve stisku spouště, jinak by prohlížeč sdílení nepovolil */
+  function dataURLBlob(du) {
+    var parts = du.split(","), bin = atob(parts[1]), u8 = new Uint8Array(bin.length);
+    for (var k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k);
+    return new Blob([u8], { type: "image/jpeg" });
   }
+  function photoFileName(label) { var d = new Date(), z = function (n) { return String(n).padStart(2, "0"); }; return "duch-" + label.toLowerCase().replace(/[^a-z0-9áčďéěíňóřšťúůýž]+/g, "-") + "-" + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()) + ".jpg"; }
+  function saveToPhone(blob, label) {
+    var name = photoFileName(label), file = null;
+    try { file = new File([blob], name, { type: "image/jpeg" }); } catch (e) {}
+    if (isIOS && file && navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: label }).catch(function () {}); return "ios"; }
+    var a = document.createElement("a"), u = URL.createObjectURL(blob); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 10000);
+    return "dl";
+  }
+  function finishPhoto(cv, i, label, gesture) {
+    var blob = dataURLBlob(cv.toDataURL("image/jpeg", 0.88)), out = URL.createObjectURL(blob);
+    lastPhoto = { blob: blob, url: out, name: label }; photos[i] = lastPhoto;
+    $("#photoimg").src = out; $("#photo").hidden = false; stageEl.hidden = true; $("#sharephoto").hidden = false;
+    $("#snap").hidden = true; markStep(3);
+    galleryAdd(blob, label);
+    return gesture ? saveToPhone(blob, label) : "";
+  }
+  /* ---------- Galerie v aplikaci (IndexedDB, zůstává i po zavření) ---------- */
+  var gdb = null;
+  function galDB() {
+    if (gdb) return gdb;
+    gdb = new Promise(function (res, rej) {
+      try {
+        var rq = indexedDB.open("lovci-duchu", 1);
+        rq.onupgradeneeded = function () { rq.result.createObjectStore("photos", { keyPath: "id", autoIncrement: true }); };
+        rq.onsuccess = function () { res(rq.result); }; rq.onerror = function () { rej(rq.error); };
+      } catch (e) { rej(e); }
+    });
+    return gdb;
+  }
+  function galleryAdd(blob, label) {
+    galDB().then(function (db) { db.transaction("photos", "readwrite").objectStore("photos").add({ blob: blob, name: label, at: Date.now() }); }).catch(function () {});
+  }
+  function galleryAll() {
+    return galDB().then(function (db) { return new Promise(function (res) { var out = [], cur = db.transaction("photos").objectStore("photos").openCursor(); cur.onsuccess = function () { var c2 = cur.result; if (c2) { out.push(c2.value); c2.continue(); } else res(out.reverse()); }; cur.onerror = function () { res(out); }; }); }).catch(function () { return []; });
+  }
+  function galleryDel(id) { return galDB().then(function (db) { db.transaction("photos", "readwrite").objectStore("photos").delete(id); }).catch(function () {}); }
+  var galUrls = [], viewing = null;
+  function openGallery() {
+    $("#gallery").hidden = false; var grid = $("#ggrid"); grid.innerHTML = "";
+    galUrls.forEach(function (u) { URL.revokeObjectURL(u); }); galUrls = [];
+    galleryAll().then(function (list) {
+      $("#gempty").hidden = list.length > 0;
+      list.forEach(function (ph) {
+        var u = URL.createObjectURL(ph.blob); galUrls.push(u);
+        var im = document.createElement("img"); im.src = u; im.alt = ph.name;
+        im.addEventListener("click", function () { viewing = ph; $("#vimg").src = u; $("#vimg").alt = ph.name; $("#viewer").hidden = false; });
+        grid.appendChild(im);
+      });
+    });
+  }
+  $("#galbtn").addEventListener("click", openGallery);
+  $("#galclose").addEventListener("click", function () { $("#gallery").hidden = true; });
+  $("#vclose").addEventListener("click", function () { $("#viewer").hidden = true; });
+  $("#vshare").addEventListener("click", function () { if (viewing) saveToPhone(viewing.blob, viewing.name); });
+  $("#vdel").addEventListener("click", function () { if (!viewing) return; galleryDel(viewing.id).then(function () { $("#viewer").hidden = true; viewing = null; openGallery(); }); });
+  /* kroky na obrazovce nálezu: 1 úkol, 2 fotka, 3 dál */
+  function markStep(k) { [1, 2, 3].forEach(function (j) { var li = document.getElementById("st" + j); li.className = j < k ? "done" : j === k ? "cur" : ""; }); }
   $("#gshot").addEventListener("click", function () {
     if (!gcam) return;
     var g = gcam, delta = wrap180(g.bear - camHeading());
@@ -2296,16 +2433,16 @@
     var label = LOOK_NAME[g.look], vw = gvid.videoWidth || 1280, vh = gvid.videoHeight || 960;
     var cv = composePhoto(gvid, vw, vh, delta, g.amt, g.look, label), i = g.i;
     closeGhostCam();
-    finishPhoto(cv, i, label);
+    var how = finishPhoto(cv, i, label, true);
     whisper(0.14, 2); bell(220, 0.1, 3);
-    speak("Máš ho! Je to " + label + ".", true);
+    speak("Máš ho! Je to " + label + ". " + (how === "ios" ? "Ťukni na Uložit obrázek a fotka bude ve Fotkách." : "Fotka je uložená v telefonu i v galerii.") + " Šipkou dole jdi na dalšího.", true);
   });
   $("#gclose").addEventListener("click", function () { closeGhostCam(); });
   /* náhradní cesta bez živé kamery: běžná fotka, duch se objeví uprostřed */
   function photoFromFile(img, i) {
     var look = lookOf(i), label = LOOK_NAME[look];
     var cv = composePhoto(img, img.naturalWidth || img.width, img.naturalHeight || img.height, rnd(-12, 12), 0.85, look, label);
-    finishPhoto(cv, i, label); whisper(0.14, 2); bell(220, 0.1, 3); speak("Podívej se na fotku. Je to " + label + ".", true);
+    finishPhoto(cv, i, label, false); whisper(0.14, 2); bell(220, 0.1, 3); speak("Podívej se na fotku. Je to " + label + ". Uložíš ji tlačítkem Uložit do Fotek.", true);
   }
   /* zvuky kamery: šum (čím víc mimo, tím víc), bzučení a tep, když míří správně */
   var camS = null;
@@ -2442,7 +2579,7 @@
     var time = mmss((finishedAt - startedAt) / 1000);
     revealEl.hidden = false; restartAnims(revealEl);
     stageEl.innerHTML = '<div class="time">' + time + "</div>" + (photos.filter(Boolean).length ? '<div class="gallery">' + photos.filter(Boolean).map(function (ph) { return '<img src="' + ph.url + '" alt="' + ph.name + '">'; }).join("") + "</div>" : "");
-    stageEl.hidden = false; $("#photo").hidden = true; $("#photobtns").hidden = true;
+    stageEl.hidden = false; $("#photo").hidden = true; $("#photobtns").hidden = true; $("#rsteps").hidden = true;
     $("#rname").textContent = "Ticho.";
     $("#rquote").textContent = NUM[N][1] + " Svíčky hoří.";
     var fin = "Ticho. " + NUM[N][1] + " Tvůj čas je " + time + ".";
@@ -2656,6 +2793,27 @@
     cold: ["Ticho.", "Zatím ticho. Jdi za duchem."]
   };
 
+  /* Řádek „Co teď“: vždy jedna jasná věta, co mají děti právě dělat */
+  var nowEl = $("#now"), nowKey = "";
+  function setNow(ic, tx, hot) {
+    var k = ic + tx + (hot ? 1 : 0); if (k === nowKey) return; nowKey = k;
+    $("#nowic").textContent = ic; $("#nowtx").textContent = tx; nowEl.classList.toggle("hot", !!hot);
+  }
+  function nowFor(band, g, fast) {
+    var car = mode === "car", t = !car && g && g.t;
+    if (band === "here") return fast ? ["front_hand", "Stůj! Je tady, ale nesmíš spěchat.", true] : ["back_hand", "Je tady! Ťukni dole na ruku a chyť ho.", true];
+    if (t === "plachy" && (band === "strong" || band === "close")) return ["do_not_step", "Je plaché. Jdi pomalu, neběhej!"];
+    if (t === "zvedavec" && (band === "strong" || band === "close")) return ["accessibility_new", "Zastav se a stůj. Přijde k tobě samo."];
+    if (t === "spac" && (band === "strong" || band === "close")) return ["bedtime", "Spí. Jdi potichu, nedupej."];
+    if (band === "close") return ["visibility", car ? "Už je blízko u silnice. Připrav ruku!" : "Je skoro u tebe. Zpomal a rozhlížej se."];
+    if (band === "strong") return ["hearing", car ? "Signál sílí, blížíme se." : "Jsi blízko. Jdi pomalu a poslouchej."];
+    return ["explore", car ? "Jedeme. Sleduj světýlko na radaru." : "Jdi tam, kde svítí světýlko na radaru."];
+  }
+  function nowText() { return $("#nowtx").textContent; }
+  $("#help").addEventListener("click", function () {
+    var extra = state === "play" ? " Na radaru jsi ty uprostřed a světýlko je duch. Čím víc pípá a čím víc ručička na měřáku, tím jsi blíž." : state === "pick" ? " Každé světýlko je jeden duch." : "";
+    speak(nowText() + extra, true);
+  });
   function frame() {
     requestAnimationFrame(frame);
     var nowF = performance.now(), dtF = Math.min(0.2, (nowF - lastFrameT) / 1000); lastFrameT = nowF;
@@ -2668,6 +2826,7 @@
     }
     var best = state === "play" ? nearest() : null;
     var hd = curHeading(), tgt = 0;
+    if (state === "play" && !best) setNow(mode === "car" ? "directions_car" : "hourglass_top", mode === "car" ? "Rozjeďte se. Detektor hledá další strašidlo před námi." : "Chvilku počkej.");
     if (best) {
       var d = best.d, ang = bearing(pos, best.g) - (hd.h === null ? 0 : hd.h);
       sayDirection(hd.h === null ? null : ang, d);
@@ -2697,14 +2856,17 @@
       stateEl.textContent = bt[0]; stateEl.className = "state" + (band === "here" || band === "close" ? " alert" : band === "strong" ? " warn" : "");
       if (bkey !== lastBand && $("#scare").hidden) { lastBand = bkey; sayEl.textContent = bt[1]; speak(bt[1], band === "here"); }
       catchBtn.disabled = band !== "here" || fast;
+      var nw = nowFor(band, best.g, fast); setNow(nw[0], nw[1], nw[2]);
       var far = origin ? dist(pos, origin) : 0;
       hintEl.textContent = "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") + (mode === "walk" && far > 120 ? " · jsi daleko od startu, vrať se" : "");
     } else if (state === "pick") {
+      setNow("touch_app", "Ťukni na jedno světýlko na radaru. Toho ducha půjdeš hledat.");
       valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Vyber ducha."; stateEl.className = "state"; catchBtn.disabled = true;
       hintEl.textContent = (pos ? "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") : "") +
         (mapInfo && mode === "walk" ? " · mapa " + mapInfo.src + " " + (mapInfo.ms / 1000).toFixed(1).replace(".", ",") + " s" : "") +
         (placeDiag && mode === "walk" ? " · přísnost " + placeDiag.lv : "");
     } else if (state === "boot") {
+      setNow("hourglass_top", "Chvilku počkej. Mávej telefonem ve vzduchu do osmičky.");
       hintEl.textContent = "kalibrace " + Math.floor((performance.now() - bootAt) / 1000) + " s" + (mode === "walk" ? (mapInfo ? " · mapa " + mapInfo.src : " · čekám na mapu okolí") : "");
     } else if (state === "intro") {
       valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = ""; stateEl.className = "state"; hintEl.textContent = "";
