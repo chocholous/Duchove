@@ -114,14 +114,60 @@
   .intro .btn.primary { grid-column: auto; }
   .msg { min-height: 2.8em; font-size: 14px; color: var(--amber); }
 
+  /* Duchové: avatar v hlavičce, výběr, odhalení */
+  h1 { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  h1 svg { width: 28px; height: 32px; flex: none; }
+  .ghost .eyes { transform-box: fill-box; transform-origin: center; animation: blink 4.2s infinite; }
+  @keyframes blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
+  .float { animation: float 2.6s ease-in-out infinite; }
+  @keyframes float { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-7%) rotate(4deg); } }
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 15; background: var(--bg);
+    padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex; flex-direction: column; overflow: auto;
+  }
+  .overlay-in { max-width: 560px; width: 100%; margin: auto; display: flex; flex-direction: column; gap: 14px; }
+  .overlay h2 { margin: 0; font: 600 28px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; text-wrap: balance; }
+  .overlay p { margin: 0; color: var(--dim); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .gcard {
+    display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px 10px;
+    border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--fg);
+  }
+  .gcard svg { width: 72px; height: 84px; }
+  .gcard b { font: 500 19px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
+  .gcard span { font: 400 13px/1.2 var(--mono); color: var(--dim); }
+  .gcard:not(:disabled):active { transform: scale(.97); }
+  .gcard:disabled { cursor: default; opacity: .55; }
+  .gcard:disabled svg { filter: grayscale(.7); }
+  .gcard:disabled span { color: var(--ecto); }
+
+  .reveal { background: radial-gradient(circle at 50% 40%, #1d2a3a 0, var(--bg) 70%); text-align: center; }
+  .reveal .overlay-in { align-items: center; }
+  .stage { position: relative; width: min(70vw, 42vh); aspect-ratio: 120 / 150; }
+  .stage .pop { position: absolute; inset: 0; animation: pop .9s cubic-bezier(.2,1.4,.4,1) both; }
+  .stage .pop svg { width: 100%; height: 100%; filter: drop-shadow(0 0 28px var(--glow, #fff)); }
+  @keyframes pop { 0% { transform: scale(.05) rotate(-40deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+  .spark { position: absolute; left: 50%; top: 45%; font-size: 26px; color: var(--amber); pointer-events: none; animation: burst 1.2s ease-out both; }
+  @keyframes burst { 0% { transform: translate(-50%, -50%) scale(.2); opacity: 1; } 100% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1); opacity: 0; } }
+  .reveal .boo { font: 600 42px/1 var(--display); letter-spacing: .08em; color: var(--glow, var(--ecto)); text-transform: uppercase; }
+  .reveal .quote { font-size: 19px; line-height: 1.4; color: var(--fg); max-width: 26em; text-wrap: pretty; }
+  .reveal .btn { width: 100%; max-width: 360px; padding: 16px 12px; font-size: 17px; }
+  .reveal .btn.primary { grid-column: auto; }
+  .troupe { display: flex; justify-content: center; gap: 2%; width: 100%; }
+  .troupe .pop { position: static; flex: 1 1 0; max-width: 90px; }
+  .troupe svg { width: 100%; height: auto; }
+
   @media (max-height: 640px) { .say { min-height: 3em; font-size: 15px; } .leds { height: 30px; } .value { font-size: 28px; } }
-  @media (prefers-reduced-motion: reduce) { .sweep { animation: none; } .led, .dot, .arrow svg { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .sweep, .float, .ghost .eyes, .stage .pop, .spark { animation: none; } .led, .dot, .arrow svg { transition: none; } }
 </style>
 </head>
 <body>
 <main class="app">
   <header class="top">
-    <h1>Detektor duchů</h1>
+    <h1 id="title">Detektor duchů</h1>
     <div class="counter" id="counter">0/5</div>
     <div class="timeleft" id="time">0:00</div>
   </header>
@@ -144,6 +190,7 @@
 
   <div class="ctl">
     <button class="btn primary" id="catch" type="button" disabled>Chyť ducha</button>
+    <button class="btn" id="pickbtn" type="button" disabled>Jiný duch</button>
     <button class="btn" id="newgame" type="button">Nová hra</button>
     <button class="btn" id="sound" type="button" aria-pressed="true">Zvuk zap</button>
     <button class="btn" id="voice" type="button" aria-pressed="true">Hlas zap</button>
@@ -171,6 +218,24 @@
   </div>
 </section>
 
+<section class="overlay" id="picker" hidden>
+  <div class="overlay-in">
+    <h2>Kterého ducha jdeš hledat?</h2>
+    <p id="pickhint">Ťukni na ducha. Šipka tě pak dovede k němu.</p>
+    <div class="cards" id="cards"></div>
+  </div>
+</section>
+
+<section class="overlay reveal" id="reveal" hidden>
+  <div class="overlay-in">
+    <div class="boo" id="boo">Bú!</div>
+    <div class="stage" id="stage"></div>
+    <h2 id="rname"></h2>
+    <p class="quote" id="rquote"></p>
+    <button class="btn primary" id="rnext" type="button">Hledat dalšího ducha</button>
+  </div>
+</section>
+
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
@@ -178,6 +243,29 @@
   var rnd = function (a, b) { return a + Math.random() * (b - a); };
   var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
   var N = 5, SAVE_KEY = "lovci-duchu-gps";
+
+  /* ---------- Duchové ---------- */
+  var CHARS = [
+    { name: "Kvído", body: "#eef3ff", glow: "#a9c4ff", acc: "hat", line: "Bú! Jsem Kvído. Tak tohle bylo rychlé, ty jsi ale lovec!" },
+    { name: "Bublina", body: "#ffd3ea", glow: "#ff8fc8", acc: "bow", line: "Hihi, mám tě! Jsem Bublina a schovávám se nejradši ze všech." },
+    { name: "Fanda", body: "#ccfbe6", glow: "#5fe3a8", acc: "glasses", line: "Jsem Fanda. Přes ty brýle jsem tě vůbec neviděl přicházet!" },
+    { name: "Žužu", body: "#fff1ad", glow: "#ffc23d", acc: "crown", line: "Já jsem Žužu, královna duchů. Uznávám, tohle se ti povedlo!" },
+    { name: "Mlžák", body: "#ddd0ff", glow: "#a98bff", acc: "scarf", line: "Brrr, jsem Mlžák. Tady venku je mi zima. Vezmeš mě s sebou?" }
+  ];
+  function ghostSVG(i, cls) {
+    var c = CHARS[i], a = "";
+    if (c.acc === "hat") a = '<rect x="32" y="16" width="56" height="7" rx="3" fill="#2a2d3a"/><rect x="42" y="-6" width="36" height="24" rx="3" fill="#2a2d3a"/><rect x="42" y="11" width="36" height="5" fill="#ff5a4f"/>';
+    if (c.acc === "bow") a = '<path d="M84 24 L66 12 L66 36 Z M84 24 L102 12 L102 36 Z" fill="#ff4f9a"/><circle cx="84" cy="24" r="6" fill="#d9327a"/>';
+    if (c.acc === "glasses") a = '<g fill="rgba(255,255,255,.35)" stroke="#2a2d3a" stroke-width="3.5"><circle cx="44" cy="60" r="13"/><circle cx="76" cy="60" r="13"/></g><path d="M57 59 Q60 55 63 59" stroke="#2a2d3a" stroke-width="3.5" fill="none"/>';
+    if (c.acc === "crown") a = '<path d="M36 24 L42 0 L51 15 L60 -4 L69 15 L78 0 L84 24 Z" fill="#ffc23d" stroke="#c98a00" stroke-width="2.5" stroke-linejoin="round"/><circle cx="60" cy="16" r="3.5" fill="#ff5a4f"/>';
+    if (c.acc === "scarf") a = '<rect x="20" y="92" width="80" height="12" rx="6" fill="#ff5a4f"/><path d="M70 100 L76 126 L88 122 L80 100 Z" fill="#e8443a"/>';
+    return '<svg class="ghost ' + (cls || "") + '" viewBox="0 -10 120 150" aria-hidden="true">' +
+      '<path d="M20 72 Q20 14 60 14 Q100 14 100 72 L100 126 Q93 116 86 126 Q78 136 70 126 Q60 116 50 126 Q42 136 34 126 Q27 116 20 126 Z" fill="' + c.body + '" stroke="rgba(0,0,0,.22)" stroke-width="2"/>' +
+      '<circle cx="34" cy="80" r="6" fill="#ff8fa8" opacity=".45"/><circle cx="86" cy="80" r="6" fill="#ff8fa8" opacity=".45"/>' +
+      '<g class="eyes"><ellipse cx="44" cy="60" rx="6.5" ry="8.5" fill="#1a1c2b"/><ellipse cx="76" cy="60" rx="6.5" ry="8.5" fill="#1a1c2b"/>' +
+      '<circle cx="46" cy="57" r="2.3" fill="#fff"/><circle cx="78" cy="57" r="2.3" fill="#fff"/></g>' +
+      '<ellipse cx="60" cy="88" rx="7" ry="9" fill="#1a1c2b"/>' + a + '</svg>';
+  }
 
   /* ---------- Zvuk, hlas, displej ---------- */
   var ctx = null, soundOn = true, voiceOn = true, lock = null;
@@ -248,7 +336,8 @@
   /* ---------- Stav ---------- */
   var state = "intro"; /* intro | locating | play | done */
   var test = false, testHeading = 0, watchId = null, pos = null, acc = 99, t0Loc = 0, resumeData = null;
-  var origin = null, ghosts = [], startedAt = 0, finishedAt = 0;
+  var origin = null, ghosts = [], startedAt = 0, finishedAt = 0, target = null;
+  var picker = $("#picker"), cardsEl = $("#cards"), revealEl = $("#reveal"), stageEl = $("#stage"), titleEl = $("#title"), pickBtn = $("#pickbtn"), rnext = $("#rnext");
   var heading = null, headingAt = 0, absSeen = false, listening = false, gpsHeading = null, gpsHeadAt = 0;
 
   var intro = $("#intro"), msg = $("#msg"), beginBtn = $("#begin"), resumeBtn = $("#resume"), testBtn = $("#testbtn");
@@ -258,7 +347,7 @@
   var dots = [];
 
   function save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ origin: origin, ghosts: ghosts, startedAt: startedAt })); } catch (e) {}
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ origin: origin, ghosts: ghosts, startedAt: startedAt, target: target })); } catch (e) {}
   }
   function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
   function loadSave() {
@@ -335,11 +424,61 @@
     origin = savedGame ? savedGame.origin : o;
     ghosts = savedGame ? savedGame.ghosts : makeGhosts(o);
     startedAt = savedGame ? savedGame.startedAt : Date.now();
-    finishedAt = 0; state = "play"; intro.hidden = true; radar.classList.remove("off");
+    target = savedGame && typeof savedGame.target === "number" && ghosts[savedGame.target] && !ghosts[savedGame.target].caught ? savedGame.target : null;
+    finishedAt = 0; intro.hidden = true; radar.classList.remove("off");
     lastBand = ""; buildDots(); save(); wake(true);
-    var left = ghosts.filter(function (g) { return !g.caught; }).length;
-    var t = savedGame ? "Pokračujeme. Zbývá chytit " + left + " duchů." : "Pět duchů se schovalo do padesáti metrů kolem tebe. Jdi za šipkou.";
+    if (target !== null) { chooseTarget(target, "Pokračujeme. "); return; }
+    var t = savedGame ? "Pokračujeme. Vyber, kterého ducha půjdeš hledat." : "Pět duchů se schovalo do padesáti metrů kolem tebe. Vyber, kterého půjdeš hledat.";
+    showPicker(); speak(t, true);
+  }
+  function showPicker() {
+    state = "pick"; revealEl.hidden = true; picker.hidden = false; hush();
+    cardsEl.innerHTML = "";
+    ghosts.forEach(function (g, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "gcard"; b.disabled = g.caught;
+      var sub = g.caught ? "Chycen ✓" : pos ? "asi " + Math.max(5, Math.round(dist(pos, g) / 5) * 5) + " m" : "";
+      b.innerHTML = ghostSVG(i, g.caught ? "" : "float") + "<b>" + CHARS[i].name + "</b><span>" + sub + "</span>";
+      if (!g.caught) b.firstChild.style.animationDelay = (-i * 0.5) + "s";
+      b.addEventListener("click", function () { chooseTarget(i, ""); });
+      cardsEl.appendChild(b);
+    });
+    var caught = ghosts.filter(function (g) { return g.caught; }).length;
+    $("#pickhint").textContent = caught ? "Máš chycené " + caught + " z " + N + ". Ťukni na dalšího ducha." : "Ťukni na ducha. Šipka tě pak dovede k němu.";
+  }
+  function chooseTarget(i, prefix) {
+    target = i; state = "play"; picker.hidden = true; save();
+    var b0 = nearest(); lastBand = b0 ? bandOf(b0.d) : "";
+    titleEl.innerHTML = ghostSVG(i) + "<span>" + CHARS[i].name + "</span>";
+    var t = prefix + "Hledáš ducha jménem " + CHARS[i].name + ". Jdi za šipkou.";
     sayEl.textContent = t; speak(t, true);
+  }
+  function jingle() {
+    [523, 659, 784, 1047].forEach(function (f, k) { setTimeout(function () { tone(f, 0.18, "triangle", 0.12); }, k * 110); });
+    setTimeout(function () { tone(420, 0.6, "sine", 0.1, 180); }, 520);
+  }
+  function sparks() {
+    for (var k = 0; k < 12; k++) {
+      var s = document.createElement("span"), a = k / 12 * Math.PI * 2, r = 90 + Math.random() * 60;
+      s.className = "spark"; s.textContent = k % 2 ? "✦" : "★";
+      s.style.setProperty("--x", Math.cos(a) * r + "px"); s.style.setProperty("--y", Math.sin(a) * r + "px");
+      s.style.animationDelay = (0.25 + Math.random() * 0.2) + "s";
+      stageEl.appendChild(s);
+    }
+  }
+  function showReveal(i) {
+    state = "reveal"; var c = CHARS[i];
+    revealEl.style.setProperty("--glow", c.glow); revealEl.hidden = false;
+    $("#boo").textContent = "Bú!";
+    stageEl.className = "stage";
+    stageEl.innerHTML = '<div class="pop">' + ghostSVG(i, "float") + "</div>"; sparks();
+    $("#rname").textContent = c.name + " je chycený!";
+    $("#rquote").textContent = "„" + c.line + "“";
+    var left = ghosts.filter(function (g) { return !g.caught; }).length;
+    rnext.textContent = left ? "Hledat dalšího ducha" : "Všichni chyceni!";
+    rnext.onclick = left ? showPicker : finish;
+    jingle(); speak(c.line, true);
+    try { navigator.vibrate && navigator.vibrate([80, 60, 80, 60, 200]); } catch (e) {}
   }
   function begin(resume) {
     audio(); test = false;
@@ -360,6 +499,7 @@
   }
   function toIntro() {
     stopWatch(); hush(); wake(false); state = "intro"; test = false; $("#testbar").hidden = true;
+    picker.hidden = true; revealEl.hidden = true; target = null; titleEl.textContent = "Detektor duchů";
     intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; radar.classList.add("off");
     saved = loadSave(); resumeBtn.hidden = !saved; msg.textContent = "";
     ghosts = []; buildDots(); counterEl.textContent = "0/" + N; timeEl.textContent = "0:00"; catchBtn.disabled = true;
@@ -369,30 +509,30 @@
     var t = "Všichni duchové jsou chyceni! Tvůj čas je " + mmss((finishedAt - startedAt) / 1000) + ".";
     sayEl.textContent = t; speak(t, true);
     tone(660, 0.2, "triangle", 0.12); setTimeout(function () { tone(880, 0.3, "triangle", 0.12); }, 220);
-    catchBtn.disabled = true;
+    catchBtn.disabled = true; pickBtn.disabled = true; titleEl.textContent = "Detektor duchů";
+    /* závěr: všichni duchové pohromadě */
+    revealEl.style.setProperty("--glow", "#5fe3cf"); revealEl.hidden = false;
+    $("#boo").textContent = "Hurá!";
+    stageEl.className = "troupe";
+    stageEl.innerHTML = CHARS.map(function (c, i) { return '<div class="pop" style="animation-delay:' + (i * 0.15) + 's">' + ghostSVG(i, "float") + "</div>"; }).join("");
+    Array.prototype.forEach.call(stageEl.querySelectorAll(".float"), function (el, i) { el.style.animationDelay = (-i * 0.4) + "s"; });
+    $("#rname").textContent = "Všech " + N + " duchů je chyceno!";
+    $("#rquote").textContent = "Tvůj čas: " + mmss((finishedAt - startedAt) / 1000) + ". Duchové se ti klaní.";
+    rnext.textContent = "Nová hra"; rnext.onclick = toIntro;
   }
   catchBtn.addEventListener("click", function () {
     if (state !== "play") return;
     var best = nearest(); if (!best || best.d > catchR()) return;
-    best.g.caught = true; save();
-    tone(500, 0.12, "triangle", 0.14, 1100); try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (e) {}
-    var left = ghosts.filter(function (g) { return !g.caught; }).length;
-    if (left === 0) { finish(); return; }
-    var t = "Chycen! Zbývá " + left + (left === 1 ? " duch." : left < 5 ? " duchové." : " duchů.") + " Jdi dál za šipkou.";
-    sayEl.textContent = t; speak(t, true); lastBand = "";
+    best.g.caught = true; target = null; save();
+    showReveal(best.i);
   });
 
   function mmss(s) { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
   function catchR() { return clamp(acc, 6, 12); }
   function nearest() {
-    if (!pos) return null;
-    var best = null;
-    ghosts.forEach(function (g, i) {
-      if (g.caught) return;
-      var d = dist(pos, g);
-      if (!best || d < best.d) best = { g: g, i: i, d: d };
-    });
-    return best;
+    /* vybraný duch, kterého dítě právě hledá */
+    if (!pos || target === null || !ghosts[target] || ghosts[target].caught) return null;
+    return { g: ghosts[target], i: target, d: dist(pos, ghosts[target]) };
   }
 
   /* ---------- Smyčka ---------- */
@@ -416,6 +556,7 @@
   function frame() {
     requestAnimationFrame(frame);
     var best = state === "play" ? nearest() : null;
+    pickBtn.disabled = state !== "play";
     var hd = curHeading(), tgt = 0;
     if (best) {
       var d = best.d, br = bearing(pos, best.g);
@@ -471,6 +612,7 @@
   resumeBtn.addEventListener("click", function () { begin(true); });
   testBtn.addEventListener("click", startTest);
   $("#newgame").addEventListener("click", toIntro);
+  pickBtn.addEventListener("click", function () { if (state === "play") { target = null; save(); showPicker(); } });
   $("#tl").addEventListener("click", function () { testHeading = (testHeading - 30 + 360) % 360; });
   $("#tr").addEventListener("click", function () { testHeading = (testHeading + 30) % 360; });
   $("#tf").addEventListener("click", function () { if (test && pos) pos = offset(pos, 3, testHeading); });
