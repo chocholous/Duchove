@@ -1,0 +1,18 @@
+{
+  "name": "Lovci duchů",
+  "short_name": "Detektor",
+  "description": "Detektor strašidel pro venkovní hru s GPS.",
+  "lang": "cs",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "background_color": "#050706",
+  "theme_color": "#050706",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
