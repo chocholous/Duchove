@@ -503,7 +503,7 @@
     <h1>Lovci duchů</h1>
     <p class="sub">Venku, za šera, poslouchej.</p>
     <p>Detektor kolem tebe zachytí strašidla. Na radaru se rozsvítí světýlka. Ťukni na jedno a jdi za ním. Až budeš blízko, uslyšíš ho. Strašidla se schovávají u chodníků a cest. Každé je jiné: plaché uteče, když běžíš, spáč se probudí, když s detektorem třeseš, zvědavec se připlíží, když stojíš, a schovávač umí vyděsit. Než ho chytíš, musíš ho zakreslit do kruhu nebo na něj nahlas říct zaklínadlo.</p>
-    <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. <span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_car</span> Z auta: pět strašidel se objevuje před autem, hraje jen spolujezdec, nikdy řidič. Je potřeba zapnutá poloha (GPS).</span></div>
+    <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. <span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_car</span> Z auta: pět strašidel se postupně objevuje na silnici, po které jedete, asi kilometr před autem. Hraje jen spolujezdec, nikdy řidič. Je potřeba zapnutá poloha (GPS).</span></div>
     <div class="note" id="ioshint" hidden><b>Přes celou obrazovku</b><span>Na iPhonu ťukni na Sdílet a pak Přidat na plochu. Detektor se pak otevře jako aplikace bez lišt prohlížeče.</span></div>
     <div class="btns">
       <div class="modes">
@@ -752,17 +752,16 @@
     });
   }
   if ("speechSynthesis" in window) { pickVoice(); try { speechSynthesis.addEventListener("voiceschanged", pickVoice); } catch (e) { speechSynthesis.onvoiceschanged = pickVoice; } }
-  var lastSpeak = 0;
-  /* Vypravěč mluví klidně a pomaleji, ne jako moderátor */
-  function speak(text, force) {
-    if (!voiceOn) return;
-    var now = performance.now();
-    if (!force && now - lastSpeak < 4000) return;
-    lastSpeak = now;
+  /* Vypravěč mluví klidně a pomaleji, ne jako moderátor.
+     Přečte každý pokyn: naléhavé (force) hned, ostatní počkají ve frontě, až domluví.
+     Méně důležité (low, třeba „světýlko je vlevo“) jen když je ticho. */
+  var speakQ = [];
+  function speechBusy() { try { return speechSynthesis.speaking || speechSynthesis.pending; } catch (e) { return false; } }
+  function speakNow(text) {
     try {
-      if (!("speechSynthesis" in window)) return;
       var u = new SpeechSynthesisUtterance(text.toLowerCase());
       u.lang = "cs-CZ"; u.pitch = 0.95; u.rate = 0.88; if (csVoice) u.voice = csVoice;
+      u.onend = u.onerror = function () { if (utt === u) setTimeout(speakNext, 250); };
       utt = u;
       var ss = speechSynthesis;
       if (ss.paused) ss.resume();
@@ -770,7 +769,16 @@
       else ss.speak(u);
     } catch (e) {}
   }
-  function hush() { try { speechSynthesis.cancel(); } catch (e) {} }
+  function speakNext() { if (speakQ.length && voiceOn && !speechBusy()) speakNow(speakQ.shift()); }
+  setInterval(speakNext, 1000); /* pojistka, kdyby telefon nenahlásil konec věty */
+  function speak(text, force, low) {
+    if (!voiceOn || !("speechSynthesis" in window) || !text) return;
+    if (force) { speakQ = []; speakNow(text); return; }
+    if (!speechBusy() && !speakQ.length) { speakNow(text); return; }
+    if (low || speakQ[speakQ.length - 1] === text) return;
+    speakQ.push(text); if (speakQ.length > 3) speakQ.shift();
+  }
+  function hush() { speakQ = []; try { speechSynthesis.cancel(); } catch (e) {} }
 
   /* Vibrace: na Androidu telefon vibruje, na iPhonu (vibrace z webu nejdou) zableskne okraj obrazovky */
   var scareOn = true, vibeOn = true, hasVib = typeof navigator.vibrate === "function", pulseEl = $("#pulse");
@@ -862,7 +870,8 @@
         .then(function (d) {
           clearTimeout(tm);
           return (d.elements || []).filter(function (e) { return e.geometry && e.geometry.length > 1; })
-            .map(function (e) { var t = e.tags || {}; return { hw: t.highway || "", foot: t.foot, fw: t.footway, pts: e.geometry.map(function (g) { return { lat: g.lat, lon: g.lon }; }) }; });
+            .map(function (e) { var t = e.tags || {}; return { hw: t.highway || "", foot: t.foot, fw: t.footway, nm: t.ref || t.name || "",
+              ow: t.oneway === "yes" || t.oneway === "1" || t.junction === "roundabout" || t.highway === "motorway" ? 1 : t.oneway === "-1" ? -1 : 0, pts: e.geometry.map(function (g) { return { lat: g.lat, lon: g.lon }; }) }; });
         })
         .catch(function () { clearTimeout(tm); return attempt(); });
     }
@@ -1180,27 +1189,104 @@
     for (var k = pool.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)), x = pool[k]; pool[k] = pool[j]; pool[j] = x; }
     return pool.map(function (c) { return { lat: null, lon: null, caught: false, c: c }; });
   }
-  /* Auto: další strašidlo se objeví stovky metrů před autem ve směru jízdy */
-  function spawnAhead(i) {
-    var now = performance.now(), dir = gpsHeading !== null && now - gpsHeadAt < 20000 ? gpsHeading : heading !== null ? heading : rnd(0, 360);
-    var p = offset(pos, rnd(450, 900), dir + rnd(-12, 12));
-    ghosts[i].lat = p.lat; ghosts[i].lon = p.lon;
-    spawnedAt = Date.now(); startD = dist(pos, ghosts[i]); hereUntil = 0;
-    /* přichytit k nejbližší silnici, ať kolem něj opravdu projedeme */
-    osmWays(p.lat, p.lon, 250, ROAD_RE).then(function (ws) {
-      var sn = snapToWays(p, ws);
-      if (sn && sn.d < 250 && target === i && !ghosts[i].caught && ghosts[i].lat === p.lat) {
-        ghosts[i].lat = sn.lat; ghosts[i].lon = sn.lon; startD = dist(pos, ghosts[i]); save();
+  /* ---------- Auto: strašidlo vždy na silnici, po které jedeme, aspoň kilometr před námi ----------
+     Z OpenStreetMap se stáhnou silnice před autem, najde se ta, po které jedeme (podle polohy a směru jízdy),
+     a po ní (a po jejím pokračování přes křižovatky co nejrovněji) se odměří 1,1 až 1,5 km. Tam strašidlo sedí. */
+  var CAR_RE = "^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$";
+  var pendingSpawn = -1, spawnGen = 0, minD = Infinity;
+  /* směr jízdy jen z pohybu (kompas v autě ruší kov karoserie) */
+  function travelHeading() {
+    var now = performance.now();
+    if (test) return testHeading;
+    if (gpsHeading !== null && now - gpsHeadAt < 20000) return gpsHeading;
+    if (trackHeading !== null && now - trackAt < 30000) return trackHeading;
+    return null;
+  }
+  function angDiff(a, b) { return Math.abs(((a - b) % 360 + 540) % 360 - 180); }
+  function roadRank(hw) { return /motorway/.test(hw) ? 6 : /trunk/.test(hw) ? 5 : /primary/.test(hw) ? 4 : /secondary/.test(hw) ? 3 : /tertiary/.test(hw) ? 2 : 1; }
+  function nodeKey(p) { return p.lat.toFixed(7) + "," + p.lon.toFixed(7); }
+  /* průmět bodu na úsečku v metrech */
+  function projSeg(p, a, b) {
+    var kx = 111320 * Math.cos(rad(p.lat)), ax = (a.lon - p.lon) * kx, ay = (a.lat - p.lat) * 111320, bx = (b.lon - p.lon) * kx, by = (b.lat - p.lat) * 111320;
+    var dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, t = L2 ? clamp(-(ax * dx + ay * dy) / L2, 0, 1) : 0;
+    var x = ax + dx * t, y = ay + dy * t;
+    return { d: Math.sqrt(x * x + y * y), t: t, lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t };
+  }
+  function alongRoad(from, hd, ways, want) {
+    var adj = {}, start = null;
+    function link(a, b, w) { var k = nodeKey(a); (adj[k] = adj[k] || []).push({ a: a, b: b, w: w }); }
+    ways.forEach(function (w) {
+      for (var k = 1; k < w.pts.length; k++) {
+        var a = w.pts[k - 1], b = w.pts[k];
+        if (w.ow >= 0) link(a, b, w);
+        if (w.ow <= 0) link(b, a, w);
+        /* silnice, po které jedeme: blízko auta a ve směru jízdy */
+        [[a, b, w.ow >= 0], [b, a, w.ow <= 0]].forEach(function (s) {
+          if (!s[2]) return;
+          var pr = projSeg(from, s[0], s[1]), turn = angDiff(bearing(s[0], s[1]), hd);
+          if (pr.d > 45 || turn > 55) return;
+          var score = pr.d + turn * 0.8;
+          if (!start || score < start.score) start = { score: score, a: s[0], b: s[1], w: w, p: { lat: pr.lat, lon: pr.lon } };
+        });
       }
+    });
+    if (!start) return null;
+    var cur = start.p, b = start.b, a = start.a, w = start.w, left = want, seen = {};
+    for (var guard = 0; guard < 600; guard++) {
+      var L = dist(cur, b);
+      if (L >= left) { var t = left / L; return { lat: cur.lat + (b.lat - cur.lat) * t, lon: cur.lon + (b.lon - cur.lon) * t, along: want }; }
+      left -= L;
+      var inB = bearing(a, b), next = null, kb = nodeKey(b);
+      seen[kb] = true;
+      (adj[kb] || []).forEach(function (e) {
+        if (nodeKey(e.b) === nodeKey(a) || seen[nodeKey(e.b)]) return;
+        var turn = angDiff(bearing(e.a, e.b), inB);
+        if (turn > 110) return;
+        /* zůstat na téže silnici (i když zatáčí); jinak co nejrovněji a ne na menší silnici */
+        var same = e.w === w || (e.w.nm && e.w.nm === w.nm);
+        var score = same ? turn * 0.3 : turn + 35 + Math.max(0, roadRank(w.hw) - roadRank(e.w.hw)) * 20;
+        if (!next || score < next.score) next = { score: score, e: e };
+      });
+      if (!next) return want - left > 600 ? { lat: b.lat, lon: b.lon, along: want - left } : null; /* slepá ulice */
+      cur = b; a = next.e.a; b = next.e.b; w = next.e.w;
+    }
+    return null;
+  }
+  function spawnAhead(i) {
+    var dir = travelHeading();
+    if (dir === null || !pos) {
+      /* auto stojí a nevíme, kudy pojede: strašidlo se objeví, až se rozjedeme */
+      ghosts[i].lat = null; ghosts[i].lon = null; pendingSpawn = i; save();
+      return false;
+    }
+    pendingSpawn = -1;
+    var gen = ++spawnGen, from = pos, want = rnd(1100, 1500);
+    /* hned náhradní bod rovně před autem; jakmile dorazí mapa, přesune se na naši silnici */
+    var p = offset(from, want, dir);
+    ghosts[i].lat = p.lat; ghosts[i].lon = p.lon; ghosts[i].onRoad = false;
+    spawnedAt = Date.now(); startD = dist(pos, ghosts[i]); minD = Infinity; hereUntil = 0; save();
+    var mid = offset(from, 800, dir);
+    osmWays(mid.lat, mid.lon, 1150, CAR_RE).then(function (ws) {
+      var q = alongRoad(from, dir, ws, want);
+      if (!q || gen !== spawnGen || target !== i || ghosts[i].caught) return;
+      ghosts[i].lat = q.lat; ghosts[i].lon = q.lon; ghosts[i].onRoad = true;
+      startD = dist(pos, ghosts[i]); minD = Infinity; save();
     }).catch(function () {});
+    return true;
   }
   function spawnNext(prefix) {
     cancelLater();
     var i = ghosts.map(function (g) { return g.caught; }).indexOf(false);
     if (i < 0) { finish(); return; }
     revealEl.hidden = true;
-    spawnAhead(i);
-    chooseTarget(i, (prefix || "") + "Detektor něco zachytil. Před námi.");
+    if (spawnAhead(i)) chooseTarget(i, (prefix || "") + carSpawnLine());
+    else waitForDrive(i, prefix);
+  }
+  function carSpawnLine() { return "Detektor něco zachytil. Je na silnici před námi, asi kilometr daleko. Až uslyšíš teď, ťukni na ruku."; }
+  function waitForDrive(i, prefix) {
+    target = i; state = "play"; catchBtn.disabled = true; save();
+    var t = (prefix || "") + "Rozjeďte se. Detektor hledá, kudy jedeme.";
+    sayEl.textContent = t; speak(t, true);
   }
   /* Výběr: dítě ťukne na světýlko na radaru. Pak se zamkne. */
   function showPick(prefix) {
@@ -1272,7 +1358,7 @@
   function toIntro() {
     bootGen++;
     cancelLater(); stopWatch(); hush(); wake(false); ambience(false); state = "intro"; test = false; $("#testbar").hidden = true;
-    revealEl.hidden = true; target = null; closeRitual(false); $("#scare").hidden = true;
+    revealEl.hidden = true; target = null; closeRitual(false); $("#scare").hidden = true; pendingSpawn = -1; spawnGen++;
     intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; $("#carbtn").disabled = false; radar.classList.remove("boot"); radar.classList.add("off");
     saved = loadSave(); resumeBtn.hidden = !saved; msg.textContent = "";
     ghosts = []; buildDots(); drawCandles(); timeEl.textContent = "0:00"; catchBtn.disabled = true; sayEl.textContent = "";
@@ -1472,10 +1558,10 @@
   }
   var carText = {
     here: ["Teď!", "Teď! Ťukni na ruku!"],
-    close: ["Velmi blízko.", "Velmi blízko. Připrav ruku."],
-    strong: ["Sílí to.", "Signál sílí. Blížíme se."],
+    close: ["Velmi blízko.", "Je kousek před námi. Připrav si ruku."],
+    strong: ["Sílí to.", "Signál sílí. Strašidlo je na silnici před námi."],
     weak: ["Slabý signál.", "Slabý signál. Jedeme správně."],
-    cold: ["Ticho.", "Zatím ticho. Jedeme dál."]
+    cold: ["Ticho.", "Strašidlo je na silnici před námi. Sleduj světýlko."]
   };
   var bandText = {
     here: ["Je tady.", "Je tady. Ťukni na ruku."],
@@ -1490,6 +1576,11 @@
     var nowF = performance.now(), dtF = Math.min(0.2, (nowF - lastFrameT) / 1000); lastFrameT = nowF;
     if (state === "play") behave(dtF);
     if (ritual && ritual.steps[ritual.k] === "still") stillStep(nowF);
+    /* auto: strašidlo čeká, až se rozjedeme */
+    if (state === "play" && mode === "car" && pendingSpawn >= 0 && pos && travelHeading() !== null) {
+      var pi = pendingSpawn;
+      if (spawnAhead(pi)) chooseTarget(pi, carSpawnLine());
+    }
     var best = state === "play" ? nearest() : null;
     var hd = curHeading(), tgt = 0;
     if (best) {
@@ -1508,14 +1599,17 @@
       if (fast) bt = ["Zpomal.", "Je tady, ale zpomal. Nesmí se splašit."];
       var bkey = band + (fast ? "!" : "");
       /* auto: strašidlo, které jsme minuli, uteče a detektor chytí jiné */
-      if (mode === "car" && (d > Math.max(1600, startD * 1.8) || (Date.now() - spawnedAt > 8 * 60000 && d > startD)) && nowp > hereUntil) {
-        spawnAhead(best.i); save(); lastBand = "";
-        var esc = "Strašidlo uteklo. Detektor chytá jiné, před námi.";
+      /* auto: když jsme strašidlo minuli nebo odbočili (vzdálenost roste o 350 m od nejbližšího místa), uteče a detektor chytí jiné před námi */
+      if (mode === "car") minD = Math.min(minD, d);
+      if (mode === "car" && nowp > hereUntil && (d > minD + 350 || Date.now() - spawnedAt > 12 * 60000)) {
+        lastBand = "";
+        var ok2 = spawnAhead(best.i);
+        var esc = ok2 ? "Strašidlo uteklo. Detektor chytil jiné, na silnici před námi." : "Strašidlo uteklo. Rozjeďte se, detektor hledá další.";
         sayEl.textContent = esc; speak(esc, true); bell(110, 0.08, 3);
         return;
       }
       stateEl.textContent = bt[0]; stateEl.className = "state" + (band === "here" || band === "close" ? " alert" : band === "strong" ? " warn" : "");
-      if (bkey !== lastBand && $("#scare").hidden) { lastBand = bkey; sayEl.textContent = bt[1]; speak(bt[1]); }
+      if (bkey !== lastBand && $("#scare").hidden) { lastBand = bkey; sayEl.textContent = bt[1]; speak(bt[1], band === "here"); }
       catchBtn.disabled = band !== "here" || fast;
       var far = origin ? dist(pos, origin) : 0;
       hintEl.textContent = "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") + (mode === "walk" && far > 120 ? " · jsi daleko od startu, vrať se" : "");
@@ -1562,7 +1656,7 @@
     var now = performance.now();
     if (dir === lastDir || now - lastDirAt < 7000) return;
     lastDir = dir; lastDirAt = now;
-    speak("Světýlko je " + dir + ".");
+    speak("Světýlko je " + dir + ".", false, true);
   }
   /* Strašidlo se ozývá: zdálky slabě a s ozvěnou, zblízka zřetelně a častěji */
   var nextCall = 0;
