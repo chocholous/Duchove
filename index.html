@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0f17">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Detektor duchů</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one screen, no scrolling. Intro overlay first. In play: title/counter/timer on top, radar with arrow fills the space, meter and spoken line, then controls. */
+  :root {
+    --bg: #0d0f17;
+    --panel: #151927;
+    --panel-2: #1b2033;
+    --line: #2a3049;
+    --fg: #e9ecf5;
+    --dim: #9199b5;
+    --ecto: #5fe3cf;
+    --amber: #ffb340;
+    --hot: #ff5a4f;
+    --led-off: #242a45;
+    --display: "Oswald", "Arial Narrow", Impact, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding-block: 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    overflow: hidden; -webkit-tap-highlight-color: transparent;
+  }
+  .app { height: 100%; max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 10px; }
+  :focus-visible { outline: 2px solid var(--ecto); outline-offset: 2px; }
+  button { font-family: inherit; cursor: pointer; }
+
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  h1 { margin: 0; font: 600 22px/1.1 var(--display); letter-spacing: .1em; text-transform: uppercase; }
+  .counter { font: 500 16px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ecto); }
+  .timeleft { font: 500 16px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--dim); }
+
+  .stagebox { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; }
+  .radar {
+    position: relative; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh);
+    border-radius: 50%; overflow: hidden; border: 1px solid var(--line);
+    background: repeating-radial-gradient(circle at center, transparent 0 15%, rgba(95,227,207,.16) 15% 15.5%), #0a1215;
+  }
+  .radar::before, .radar::after { content: ""; position: absolute; background: rgba(95,227,207,.14); }
+  .radar::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+  .radar::after { top: 50%; left: 0; right: 0; height: 1px; }
+  .sweep {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, rgba(95,227,207,0) 0deg, rgba(95,227,207,0) 286deg, rgba(95,227,207,.45) 360deg);
+    animation: spin 3.2s linear infinite;
+  }
+  .radar.off .sweep { animation-play-state: paused; opacity: .15; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .me { position: absolute; left: 50%; top: 50%; width: 3%; aspect-ratio: 1; margin: -1.5% 0 0 -1.5%; border-radius: 50%; background: var(--ecto); }
+  .dot { position: absolute; width: 6%; aspect-ratio: 1; margin: -3% 0 0 -3%; border-radius: 50%; background: var(--amber); opacity: .5; transition: left .25s linear, top .25s linear, opacity .3s; }
+  .dot.near { background: var(--hot); box-shadow: 0 0 14px var(--hot); opacity: 1; }
+  .arrow { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; transition: opacity .3s; }
+  .arrow svg { width: 34%; height: 34%; color: var(--hot); transform: rotate(var(--ang, 0deg)); transition: transform .12s linear; filter: drop-shadow(0 0 12px var(--hot)); }
+  .north { position: absolute; top: 3%; left: 50%; transform: translateX(-50%); font: 500 12px/1 var(--display); letter-spacing: .14em; color: var(--dim); }
+
+  .info { display: flex; flex-direction: column; gap: 8px; }
+  .readout { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .value { font: 500 34px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .value small { font-size: 15px; color: var(--dim); margin-left: 4px; }
+  .state { font: 500 14px/1.2 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); text-align: right; }
+  .state.warn { color: var(--amber); }
+  .state.alert { color: var(--hot); }
+  .leds { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; align-items: end; height: 40px; }
+  .led { height: calc(14px + var(--i) * 6.5px); border-radius: 5px; background: var(--led-off); transition: background .12s, box-shadow .12s; }
+  .led:nth-child(1), .led:nth-child(2) { --c: #4be08a; }
+  .led:nth-child(3) { --c: #ffc23d; }
+  .led:nth-child(4) { --c: #ff8a3d; }
+  .led:nth-child(5) { --c: #ff4f45; }
+  .led.on { background: var(--c); box-shadow: 0 0 14px var(--c); }
+  .say { margin: 0; min-height: 4.2em; font-size: 17px; line-height: 1.4; text-wrap: pretty; }
+  .dirhint { margin: 0; font: 400 12px/1.4 var(--mono); color: var(--dim); min-height: 2.8em; }
+
+  .ctl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .btn {
+    min-width: 0; padding: 14px 6px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--fg); font: 500 14px/1.15 var(--display); letter-spacing: .06em; text-transform: uppercase;
+  }
+  .btn.primary { grid-column: span 2; background: var(--ecto); color: #07201c; border-color: var(--ecto); font-size: 17px; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn[aria-pressed="false"] { color: var(--dim); }
+  .testbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+  /* Úvodní obrazovka */
+  .intro {
+    position: fixed; inset: 0; z-index: 20; background: var(--bg);
+    padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex; flex-direction: column; justify-content: center; overflow: auto;
+  }
+  .intro-in { max-width: 520px; width: 100%; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
+  .intro h2 { margin: 0; font: 600 34px/1.05 var(--display); letter-spacing: .08em; text-transform: uppercase; text-wrap: balance; }
+  .intro p { margin: 0; color: var(--dim); }
+  .intro .rules { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--fg); font-size: 15px; }
+  .intro .rules b { font: 500 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
+  .intro .safe { border-color: var(--amber); }
+  .intro .btns { display: flex; flex-direction: column; gap: 10px; }
+  .intro .btn { padding: 16px 12px; font-size: 17px; }
+  .intro .btn.primary { grid-column: auto; }
+  .msg { min-height: 2.8em; font-size: 14px; color: var(--amber); }
+
+  @media (max-height: 640px) { .say { min-height: 3em; font-size: 15px; } .leds { height: 30px; } .value { font-size: 28px; } }
+  @media (prefers-reduced-motion: reduce) { .sweep { animation: none; } .led, .dot, .arrow svg { transition: none; } }
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="top">
+    <h1>Detektor duchů</h1>
+    <div class="counter" id="counter">0/5</div>
+    <div class="timeleft" id="time">0:00</div>
+  </header>
+
+  <div class="stagebox">
+    <div class="radar off" id="radar" aria-hidden="true">
+      <div class="sweep"></div>
+      <div class="north" id="north">N</div>
+      <div class="me"></div>
+      <div class="arrow" id="arrow"><svg viewBox="0 0 24 24" aria-label="Směr k nejbližšímu duchovi"><path fill="currentColor" d="M12 2 L20 14 H14 V22 H10 V14 H4 Z"/></svg></div>
+    </div>
+  </div>
+
+  <div class="info">
+    <div class="readout"><div class="value" id="value">--<small>m</small></div><div class="state" id="state">Čeká na start</div></div>
+    <div class="leds" aria-hidden="true"><span class="led" style="--i:0"></span><span class="led" style="--i:1"></span><span class="led" style="--i:2"></span><span class="led" style="--i:3"></span><span class="led" style="--i:4"></span></div>
+    <p class="say" id="say" aria-live="polite"></p>
+    <p class="dirhint" id="dirhint"></p>
+  </div>
+
+  <div class="ctl">
+    <button class="btn primary" id="catch" type="button" disabled>Chyť ducha</button>
+    <button class="btn" id="newgame" type="button">Nová hra</button>
+    <button class="btn" id="sound" type="button" aria-pressed="true">Zvuk zap</button>
+    <button class="btn" id="voice" type="button" aria-pressed="true">Hlas zap</button>
+    <button class="btn" id="fs" type="button">Celá obrazovka</button>
+  </div>
+  <div class="testbar" id="testbar" hidden>
+    <button class="btn" id="tl" type="button" aria-label="Otočit doleva">↶ otočit</button>
+    <button class="btn" id="tf" type="button">Krok 3 m</button>
+    <button class="btn" id="tr" type="button" aria-label="Otočit doprava">otočit ↷</button>
+  </div>
+</main>
+
+<section class="intro" id="intro">
+  <div class="intro-in">
+    <h2>Lovci duchů</h2>
+    <p>Telefon ti po stisknutí tlačítka rozmístí pět duchů do 50 metrů kolem tebe. Jdi podle šipky a u každého stiskni Chyť ducha.</p>
+    <div class="rules safe"><b>Bezpečí</b><span>Hrajte jen na bezpečném místě, daleko od silnice. Domluvte si hranice hřiště a čas návratu.</span></div>
+    <div class="rules"><b>Potřebuješ</b><span>Zapnutou polohu (GPS) a povolit kompas. Venku pod širým nebem to funguje nejlépe.</span></div>
+    <div class="btns">
+      <button class="btn primary" id="begin" type="button">Hledat duchy</button>
+      <button class="btn" id="resume" type="button" hidden>Pokračovat v rozehrané hře</button>
+      <button class="btn" id="testbtn" type="button">Zkouška doma bez GPS</button>
+    </div>
+    <p class="msg" id="msg" aria-live="polite"></p>
+  </div>
+</section>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var rnd = function (a, b) { return a + Math.random() * (b - a); };
+  var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+  var N = 5, SAVE_KEY = "lovci-duchu-gps";
+
+  /* ---------- Zvuk, hlas, displej ---------- */
+  var ctx = null, soundOn = true, voiceOn = true, lock = null;
+  function audio() {
+    try {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+    } catch (e) { ctx = null; }
+    return ctx;
+  }
+  function tone(f, d, type, v, f2) {
+    if (!soundOn) return;
+    var c = audio(); if (!c) return;
+    var o = c.createOscillator(), g = c.createGain(), n = c.currentTime;
+    o.type = type || "sine"; o.frequency.setValueAtTime(f, n);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, n + d);
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(v || 0.1, n + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, n + d);
+    o.connect(g); g.connect(c.destination); o.start(n); o.stop(n + d + 0.02);
+  }
+  var lastSpeak = 0;
+  function speak(text, force) {
+    if (!voiceOn) return;
+    var now = performance.now();
+    if (!force && now - lastSpeak < 4000) return;
+    lastSpeak = now;
+    try {
+      if (!("speechSynthesis" in window)) return;
+      var u = new SpeechSynthesisUtterance(text.toLowerCase());
+      u.lang = "cs-CZ"; u.pitch = 0.6; u.rate = 0.95;
+      speechSynthesis.cancel(); speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function hush() { try { speechSynthesis.cancel(); } catch (e) {} }
+  function wake(on) {
+    try {
+      if (on && !lock && navigator.wakeLock) {
+        navigator.wakeLock.request("screen").then(function (l) { lock = l; l.addEventListener("release", function () { lock = null; }); }).catch(function () {});
+      } else if (!on && lock) { lock.release(); lock = null; }
+    } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && state === "play") wake(true); });
+
+  /* ---------- Zeměpis ---------- */
+  var R = 6371000, rad = function (d) { return d * Math.PI / 180; };
+  function dist(a, b) {
+    var dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon), la = rad(a.lat), lb = rad(b.lat);
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(la) * Math.cos(lb) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function bearing(a, b) {
+    var la = rad(a.lat), lb = rad(b.lat), dLon = rad(b.lon - a.lon);
+    var y = Math.sin(dLon) * Math.cos(lb), x = Math.cos(la) * Math.sin(lb) - Math.sin(la) * Math.cos(lb) * Math.cos(dLon);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+  function offset(p, d, b) {
+    var br = rad(b);
+    return { lat: p.lat + d * Math.cos(br) / 111320, lon: p.lon + d * Math.sin(br) / (111320 * Math.cos(rad(p.lat))) };
+  }
+  function makeGhosts(o) {
+    var base = rnd(0, 360), g = [];
+    for (var i = 0; i < N; i++) {
+      var p = offset(o, rnd(15, 50), (base + i * (360 / N) + rnd(-20, 20) + 360) % 360);
+      g.push({ lat: p.lat, lon: p.lon, caught: false });
+    }
+    return g;
+  }
+
+  /* ---------- Stav ---------- */
+  var state = "intro"; /* intro | locating | play | done */
+  var test = false, testHeading = 0, watchId = null, pos = null, acc = 99, t0Loc = 0, resumeData = null;
+  var origin = null, ghosts = [], startedAt = 0, finishedAt = 0;
+  var heading = null, headingAt = 0, absSeen = false, listening = false, gpsHeading = null, gpsHeadAt = 0;
+
+  var intro = $("#intro"), msg = $("#msg"), beginBtn = $("#begin"), resumeBtn = $("#resume"), testBtn = $("#testbtn");
+  var radar = $("#radar"), arrowEl = $("#arrow"), northEl = $("#north"), sayEl = $("#say"), hintEl = $("#dirhint");
+  var valueEl = $("#value"), stateEl = $("#state"), counterEl = $("#counter"), timeEl = $("#time"), catchBtn = $("#catch");
+  var leds = Array.prototype.slice.call(document.querySelectorAll(".led"));
+  var dots = [];
+
+  function save() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ origin: origin, ghosts: ghosts, startedAt: startedAt })); } catch (e) {}
+  }
+  function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+  function loadSave() {
+    try {
+      var s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+      if (s && s.origin && s.ghosts && s.ghosts.length === N && Date.now() - s.startedAt < 3 * 3600 * 1000 && s.ghosts.some(function (g) { return !g.caught; })) return s;
+    } catch (e) {}
+    return null;
+  }
+  var saved = loadSave();
+  if (saved) resumeBtn.hidden = false;
+
+  /* ---------- Kompas ---------- */
+  function onOri(e) {
+    var h = null;
+    if (e.type === "deviceorientationabsolute") absSeen = true;
+    else if (absSeen && typeof e.webkitCompassHeading !== "number") return;
+    if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;
+    else if (e.alpha !== null && e.alpha !== undefined) h = (360 - e.alpha) % 360;
+    if (h === null) return;
+    heading = h; headingAt = performance.now();
+  }
+  async function compassPermission() {
+    try {
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") {
+        var r = await DeviceOrientationEvent.requestPermission();
+        if (r !== "granted") return false;
+      }
+    } catch (e) { return false; }
+    if (!listening) {
+      listening = true;
+      window.addEventListener("deviceorientationabsolute", onOri, true);
+      window.addEventListener("deviceorientation", onOri, true);
+    }
+    return true;
+  }
+  function curHeading() {
+    var now = performance.now();
+    if (test) return { h: testHeading, src: "zkouška" };
+    if (heading !== null && now - headingAt < 2000) return { h: heading, src: "kompas" };
+    if (gpsHeading !== null && now - gpsHeadAt < 4000) return { h: gpsHeading, src: "směr chůze" };
+    return { h: null, src: "bez kompasu" };
+  }
+
+  /* ---------- GPS ---------- */
+  function stopWatch() { if (watchId !== null) { try { navigator.geolocation.clearWatch(watchId); } catch (e) {} watchId = null; } }
+  function onPos(p) {
+    pos = { lat: p.coords.latitude, lon: p.coords.longitude };
+    acc = p.coords.accuracy || 99;
+    if (typeof p.coords.heading === "number" && !isNaN(p.coords.heading) && (p.coords.speed || 0) > 0.8) { gpsHeading = p.coords.heading; gpsHeadAt = performance.now(); }
+    if (state === "locating") {
+      msg.textContent = "Hledám GPS… přesnost " + Math.round(acc) + " m. Počkej pár vteřin.";
+      if (acc <= 25 || performance.now() - t0Loc > 12000) startGame(pos);
+    }
+  }
+  function onPosErr(e) {
+    if (state === "locating") {
+      state = "intro"; beginBtn.disabled = false; resumeBtn.disabled = false; stopWatch();
+      msg.textContent = e && e.code === 1
+        ? "Poloha je zakázaná. Povol ji v nastavení prohlížeče pro tuhle stránku. V náhledu uvnitř Claude poloha nefunguje, otevři stránku jako samostatný web."
+        : "GPS se nepodařilo zjistit. Vyjdi ven pod širé nebe a zkus to znovu.";
+    } else if (state === "play") {
+      hintEl.textContent = "GPS signál se ztratil. Chvíli stůj na místě.";
+    }
+  }
+
+  /* ---------- Průběh hry ---------- */
+  function buildDots() {
+    dots.forEach(function (d) { if (d.parentNode) d.parentNode.removeChild(d); });
+    dots = ghosts.map(function () { var d = document.createElement("span"); d.className = "dot"; radar.appendChild(d); return d; });
+  }
+  function startGame(o, savedGame) {
+    savedGame = savedGame || resumeData; resumeData = null;
+    origin = savedGame ? savedGame.origin : o;
+    ghosts = savedGame ? savedGame.ghosts : makeGhosts(o);
+    startedAt = savedGame ? savedGame.startedAt : Date.now();
+    finishedAt = 0; state = "play"; intro.hidden = true; radar.classList.remove("off");
+    lastBand = ""; buildDots(); save(); wake(true);
+    var left = ghosts.filter(function (g) { return !g.caught; }).length;
+    var t = savedGame ? "Pokračujeme. Zbývá chytit " + left + " duchů." : "Pět duchů se schovalo do padesáti metrů kolem tebe. Jdi za šipkou.";
+    sayEl.textContent = t; speak(t, true);
+  }
+  function begin(resume) {
+    audio(); test = false;
+    if (!navigator.geolocation) { msg.textContent = "Tenhle prohlížeč neumí zjistit polohu."; return; }
+    beginBtn.disabled = true; resumeBtn.disabled = true;
+    msg.textContent = "Zapínám kompas a GPS. Povol obojí, až se telefon zeptá.";
+    var cp = compassPermission(); /* musí se zavolat hned v gestu uživatele */
+    resumeData = resume ? loadSave() : null;
+    state = "locating"; t0Loc = performance.now(); pos = null;
+    cp.then(function () {
+      if (state !== "locating") return;
+      watchId = navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+    });
+  }
+  function startTest() {
+    audio(); test = true; testHeading = 0; acc = 5; pos = { lat: 50.0755, lon: 14.4378 };
+    $("#testbar").hidden = false; resumeData = null; startGame(pos, null);
+  }
+  function toIntro() {
+    stopWatch(); hush(); wake(false); state = "intro"; test = false; $("#testbar").hidden = true;
+    intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; radar.classList.add("off");
+    saved = loadSave(); resumeBtn.hidden = !saved; msg.textContent = "";
+    ghosts = []; buildDots(); counterEl.textContent = "0/" + N; timeEl.textContent = "0:00"; catchBtn.disabled = true;
+  }
+  function finish() {
+    state = "done"; finishedAt = Date.now(); clearSave(); stopWatch(); wake(false); radar.classList.add("off");
+    var t = "Všichni duchové jsou chyceni! Tvůj čas je " + mmss((finishedAt - startedAt) / 1000) + ".";
+    sayEl.textContent = t; speak(t, true);
+    tone(660, 0.2, "triangle", 0.12); setTimeout(function () { tone(880, 0.3, "triangle", 0.12); }, 220);
+    catchBtn.disabled = true;
+  }
+  catchBtn.addEventListener("click", function () {
+    if (state !== "play") return;
+    var best = nearest(); if (!best || best.d > catchR()) return;
+    best.g.caught = true; save();
+    tone(500, 0.12, "triangle", 0.14, 1100); try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (e) {}
+    var left = ghosts.filter(function (g) { return !g.caught; }).length;
+    if (left === 0) { finish(); return; }
+    var t = "Chycen! Zbývá " + left + (left === 1 ? " duch." : left < 5 ? " duchové." : " duchů.") + " Jdi dál za šipkou.";
+    sayEl.textContent = t; speak(t, true); lastBand = "";
+  });
+
+  function mmss(s) { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+  function catchR() { return clamp(acc, 6, 12); }
+  function nearest() {
+    if (!pos) return null;
+    var best = null;
+    ghosts.forEach(function (g, i) {
+      if (g.caught) return;
+      var d = dist(pos, g);
+      if (!best || d < best.d) best = { g: g, i: i, d: d };
+    });
+    return best;
+  }
+
+  /* ---------- Smyčka ---------- */
+  var level = 0, shownAng = 0, lastBand = "";
+  function bandOf(d) {
+    var r = catchR();
+    if (d <= r) return "here";
+    if (d <= 12) return "close";
+    if (d <= 25) return "strong";
+    if (d <= 40) return "weak";
+    return "cold";
+  }
+  var bandText = {
+    here: ["Duch je přímo tady!", "Duch je přímo tady! Stiskni Chyť ducha."],
+    close: ["Skoro tam", "Skoro tam! Hledej kolem sebe."],
+    strong: ["Silný signál", "Silný signál! Jsi blízko."],
+    weak: ["Slabý signál", "Slabý signál. Jdi směrem šipky."],
+    cold: ["Studený signál", "Studený signál. Jdi směrem šipky."]
+  };
+
+  function frame() {
+    requestAnimationFrame(frame);
+    var best = state === "play" ? nearest() : null;
+    var hd = curHeading(), tgt = 0;
+    if (best) {
+      var d = best.d, br = bearing(pos, best.g);
+      var ang = br - (hd.h === null ? 0 : hd.h);
+      var dd = (((ang - shownAng) % 360) + 540) % 360 - 180; shownAng += dd;
+      arrowEl.style.setProperty("--ang", shownAng + "deg");
+      arrowEl.style.opacity = d <= catchR() ? "0.35" : "1";
+      northEl.style.opacity = hd.h === null ? "1" : "0.4";
+      tgt = clamp(5 * (1 - (d - 4) / 46), 0, 5);
+      valueEl.innerHTML = Math.round(d) + "<small>m</small>";
+      var band = bandOf(d);
+      var bt = bandText[band];
+      stateEl.textContent = bt[0]; stateEl.className = "state" + (band === "here" || band === "close" ? " alert" : band === "strong" ? " warn" : "");
+      if (band !== lastBand) { lastBand = band; sayEl.textContent = bt[1]; speak(bt[1]); }
+      catchBtn.disabled = band !== "here";
+      /* radar: všechny nechycené duchy, měřítko 60 m */
+      ghosts.forEach(function (g, i) {
+        var el = dots[i]; if (!el) return;
+        if (g.caught) { el.style.opacity = "0"; return; }
+        var gd = dist(pos, g), rel = bearing(pos, g) - (hd.h === null ? 0 : hd.h), r = Math.min(gd, 60) / 60 * 46;
+        el.style.left = (50 + r * Math.sin(rad(rel))) + "%"; el.style.top = (50 - r * Math.cos(rad(rel))) + "%";
+        el.className = "dot" + (i === best.i ? " near" : ""); el.style.opacity = "";
+      });
+      var far = origin ? dist(pos, origin) : 0;
+      hintEl.textContent = "GPS ±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " (nahoře je sever)" : "") + (far > 120 ? " · Jsi daleko od startu, vrať se." : "");
+    } else if (state === "done") {
+      valueEl.innerHTML = "0<small>m</small>"; stateEl.textContent = "Hotovo"; stateEl.className = "state";
+      arrowEl.style.opacity = "0"; hintEl.textContent = "";
+    } else {
+      arrowEl.style.opacity = "0";
+      if (state === "intro") { valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Čeká na start"; stateEl.className = "state"; }
+    }
+    level += (tgt - level) * 0.1;
+    for (var i = 0; i < leds.length; i++) leds[i].classList.toggle("on", state === "play" && level >= i + 0.5);
+    if (state === "play" || state === "done") {
+      var left = ghosts.filter(function (g) { return !g.caught; }).length;
+      counterEl.textContent = (N - left) + "/" + N;
+      timeEl.textContent = mmss(((state === "done" ? finishedAt : Date.now()) - startedAt) / 1000);
+    }
+  }
+  function beepLoop() {
+    var next = 300;
+    if (state === "play" && level > 0.4) {
+      tone(520 + level * 230, 0.09, "square", 0.06);
+      if (level > 3.5) { try { navigator.vibrate && navigator.vibrate(40); } catch (e) {} }
+      next = Math.max(120, 1400 - level * 260);
+    }
+    setTimeout(beepLoop, next);
+  }
+
+  /* ---------- Ovládání ---------- */
+  beginBtn.addEventListener("click", function () { begin(false); });
+  resumeBtn.addEventListener("click", function () { begin(true); });
+  testBtn.addEventListener("click", startTest);
+  $("#newgame").addEventListener("click", toIntro);
+  $("#tl").addEventListener("click", function () { testHeading = (testHeading - 30 + 360) % 360; });
+  $("#tr").addEventListener("click", function () { testHeading = (testHeading + 30) % 360; });
+  $("#tf").addEventListener("click", function () { if (test && pos) pos = offset(pos, 3, testHeading); });
+  $("#sound").addEventListener("click", function () { soundOn = !soundOn; this.setAttribute("aria-pressed", soundOn); this.textContent = soundOn ? "Zvuk zap" : "Zvuk vyp"; });
+  $("#voice").addEventListener("click", function () { voiceOn = !voiceOn; this.setAttribute("aria-pressed", voiceOn); this.textContent = voiceOn ? "Hlas zap" : "Hlas vyp"; if (!voiceOn) hush(); });
+  var fsBtn = $("#fs");
+  if (!document.documentElement.requestFullscreen) fsBtn.hidden = true;
+  fsBtn.addEventListener("click", function () {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+      else document.documentElement.requestFullscreen().catch(function () {});
+    } catch (e) {}
+  });
+  document.addEventListener("fullscreenchange", function () { fsBtn.textContent = document.fullscreenElement ? "Zavřít celou" : "Celá obrazovka"; });
+
+  frame(); beepLoop();
+})();
+</script>
+</body>
+</html>
