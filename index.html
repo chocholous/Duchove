@@ -123,6 +123,9 @@
   .intro .rules b { font: 500 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
   .intro .safe { border-color: var(--amber); }
   .intro .btns { display: flex; flex-direction: column; gap: 10px; }
+  .voicerow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .voicerow span { font: 500 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
+  .voicerow select { flex: 1; min-width: 0; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); font: inherit; font-size: 15px; }
   .intro .btn { padding: 16px 12px; font-size: 17px; }
   .intro .btn.primary { grid-column: auto; }
   .msg { min-height: 2.8em; font-size: 14px; color: var(--amber); }
@@ -225,6 +228,7 @@
       <button class="btn" id="resume" type="button" hidden>Pokračovat v rozehrané hře</button>
       <button class="btn" id="testbtn" type="button">Zkouška doma bez GPS</button>
       <button class="btn" id="sndtest" type="button">Test zvuku</button>
+      <label class="voicerow" id="voicerow" hidden><span>Hlas</span><select id="voicesel" aria-label="Hlas vypravěče"></select></label>
     </div>
     <p class="msg" id="msg" aria-live="polite"></p>
   </div>
@@ -382,11 +386,41 @@
     }
   }
   ["pointerdown", "touchend", "click", "keydown"].forEach(function (ev) { document.addEventListener(ev, unlock, true); });
+  /* Nejlepší český hlas, který telefon má: prémiové a vylepšené hlasy (iPhone), Google a neurální hlasy (Android, Chrome, Edge).
+     Robotické hlasy Eloquence z iPhonu (Eddy, Flo, Babička…) jdou až na konec. */
+  var VOICE_KEY = "lovci-duchu-hlas", csVoices = [];
+  function voiceScore(v) {
+    var n = v.name + " " + (v.voiceURI || ""), sc = 0;
+    if (/premium|prémiov/i.test(n)) sc += 6;
+    if (/enhanced|vylepšen/i.test(n)) sc += 5;
+    if (/neural|natural|online/i.test(n)) sc += 5;
+    if (/google/i.test(n)) sc += 4;
+    if (/zuzana|jakub|antonin|vlasta/i.test(n)) sc += 1;
+    if (/eloquence|eddy|flo|grandma|grandpa|babička|dědeček|reed|rocko|sandy|shelley|compact/i.test(n)) sc -= 6;
+    if (v.localService === false) sc += 1;
+    return sc;
+  }
   function pickVoice() {
     try {
       var vs = speechSynthesis.getVoices() || [];
-      csVoice = vs.filter(function (v) { return /^cs/i.test(v.lang); })[0] || null;
+      csVoices = vs.filter(function (v) { return /^cs/i.test(v.lang); }).sort(function (a, b) { return voiceScore(b) - voiceScore(a); });
+      var want = null; try { want = localStorage.getItem(VOICE_KEY); } catch (e) {}
+      csVoice = csVoices.filter(function (v) { return v.voiceURI === want; })[0] || csVoices[0] || null;
+      fillVoiceSel();
     } catch (e) {}
+  }
+  function fillVoiceSel() {
+    var sel = document.getElementById("voicesel"), row = document.getElementById("voicerow");
+    if (!sel || !row) return;
+    row.hidden = csVoices.length < 2;
+    sel.innerHTML = "";
+    csVoices.forEach(function (v) {
+      var o = document.createElement("option");
+      o.value = v.voiceURI; var n = v.name + " " + (v.voiceURI || "");
+      o.textContent = v.name.split(" (")[0].trim() + (/premium|prémiov/i.test(n) ? " – prémiový" : /enhanced|vylepšen/i.test(n) ? " – vylepšený" : /neural|natural|online/i.test(n) ? " – přirozený" : "") + (voiceScore(v) >= 4 ? " ★" : "");
+      if (csVoice && v.voiceURI === csVoice.voiceURI) o.selected = true;
+      sel.appendChild(o);
+    });
   }
   if ("speechSynthesis" in window) { pickVoice(); try { speechSynthesis.addEventListener("voiceschanged", pickVoice); } catch (e) { speechSynthesis.onvoiceschanged = pickVoice; } }
   function tone(f, d, type, v, f2) {
@@ -399,7 +433,8 @@
     o.connect(g); g.connect(out()); o.start(n); o.stop(n + d + 0.02);
   }
   var lastSpeak = 0;
-  function speak(text, force) {
+  /* opts.pitch / opts.rate: duchové mluví výš, zombie hlouběji; vypravěč přirozeně */
+  function speak(text, force, opts) {
     if (!voiceOn) return;
     var now = performance.now();
     if (!force && now - lastSpeak < 4000) return;
@@ -407,7 +442,7 @@
     try {
       if (!("speechSynthesis" in window)) return;
       var u = new SpeechSynthesisUtterance(text.toLowerCase());
-      u.lang = "cs-CZ"; u.pitch = 0.6; u.rate = 0.95; if (csVoice) u.voice = csVoice;
+      u.lang = "cs-CZ"; u.pitch = opts && opts.pitch || 1; u.rate = opts && opts.rate || 1; if (csVoice) u.voice = csVoice;
       utt = u; /* držet odkaz, jinak ho Chrome uklidí a hlas utichne */
       var ss = speechSynthesis;
       if (ss.paused) ss.resume();
@@ -599,8 +634,8 @@
     var left = ghosts.filter(function (g) { return !g.caught; }).length;
     rnext.textContent = left ? "Hledat další tečku" : "Všichni chyceni!";
     rnext.onclick = left ? function () { showPick(""); } : finish;
-    if (zom) { groan(c.hoo, 0.35); setTimeout(function () { speak(c.line, true); }, 900); }
-    else { jingle(); speak(c.line, true); }
+    if (zom) { groan(c.hoo, 0.35); setTimeout(function () { speak(c.line, true, { pitch: 0.75, rate: 0.85 }); }, 900); }
+    else { jingle(); speak(c.line, true, { pitch: 1.35, rate: 1.05 }); }
     try { navigator.vibrate && navigator.vibrate(zom ? [300, 80, 300] : [80, 60, 80, 60, 200]); } catch (e) {}
   }
   function begin(resume) {
@@ -790,6 +825,12 @@
   beginBtn.addEventListener("click", function () { begin(false); });
   resumeBtn.addEventListener("click", function () { begin(true); });
   testBtn.addEventListener("click", startTest);
+  $("#voicesel").addEventListener("change", function () {
+    var uri = this.value;
+    csVoice = csVoices.filter(function (v) { return v.voiceURI === uri; })[0] || csVoice;
+    try { localStorage.setItem(VOICE_KEY, uri); } catch (e) {}
+    speak("Ahoj, já budu tvůj průvodce. Jdeme lovit strašidla!", true);
+  });
   $("#sndtest").addEventListener("click", function () {
     soundOn = true; voiceOn = true; unlock();
     jingle(); setTimeout(function () { hoo(400, 0.3); }, 700); setTimeout(function () { groan(110, 0.3); }, 2300);
@@ -797,7 +838,7 @@
     var c = ctx ? ctx.state : "žádný";
     msg.textContent = "Hraje melodie, houkání a chrčení, pak promluví hlas. " +
       (c !== "running" ? "Zvuk je zatím zablokovaný (" + c + "), ťukni znovu. " : "") +
-      (!("speechSynthesis" in window) ? "Tenhle prohlížeč neumí mluvit. " : !csVoice ? "Telefon nemá český hlas, hlas může mluvit anglicky nebo mlčet. " : "") +
+      (!("speechSynthesis" in window) ? "Tenhle prohlížeč neumí mluvit. " : !csVoice ? "Telefon nemá český hlas, hlas může mluvit anglicky nebo mlčet. " : voiceScore(csVoice) < 4 ? "Hlas: " + csVoice.name + ". Lepší hlas si můžeš stáhnout v nastavení telefonu. " : "Hlas: " + csVoice.name + ". ") +
       "Nic neslyšíš? Zesil hlasitost a na iPhonu vypni tichý režim.";
   });
   $("#newgame").addEventListener("click", toIntro);
