@@ -3,247 +3,242 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d0f17">
+<meta name="theme-color" content="#050706">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Detektor duchů</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@400;500;600&display=swap">
+<title>Lovci duchů</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-  /* Layout: one screen, no scrolling. Intro overlay first. In play: title/counter/timer on top, radar with the hunted ghost fills the space, meter and spoken line, then controls. */
+  /* Atmosféra: tma, mlha, zrno, tlumené barvy kosti a fosforu. Žádné emoji, žádné křiklavé barvy.
+     Layout: jedna obrazovka bez posouvání. Nahoře svíčky (kolik je nalezeno) a čas, uprostřed radar se světýlky,
+     pod ním vzdálenost a měřák, dole tlačítka jen s ikonami. */
   :root {
-    --bg: #0d0f17;
-    --panel: #151927;
-    --panel-2: #1b2033;
-    --line: #2a3049;
-    --fg: #e9ecf5;
-    --dim: #9199b5;
-    --ecto: #5fe3cf;
-    --amber: #ffb340;
-    --hot: #ff5a4f;
-    --led-off: #242a45;
-    --display: "Oswald", "Arial Narrow", Impact, sans-serif;
+    --bg: #050706;
+    --panel: rgba(16, 20, 19, .72);
+    --line: rgba(190, 205, 195, .14);
+    --fg: #d8d6cb;
+    --dim: #7f877f;
+    --faint: #4a524c;
+    --ghost: #b9d6c8;
+    --ember: #c9a46a;
+    --blood: #a8443a;
+    --serif: "EB Garamond", "Iowan Old Style", Georgia, serif;
     --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
     color-scheme: dark;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   [hidden] { display: none !important; }
   body {
     background: var(--bg); color: var(--fg);
-    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    padding-block: 10px;
+    font: 17px/1.5 var(--serif);
+    padding-block: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-bottom, 0px));
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
     overflow: hidden; -webkit-tap-highlight-color: transparent;
   }
-  .app { height: 100%; max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 10px; }
-  :focus-visible { outline: 2px solid var(--ecto); outline-offset: 2px; }
+  :focus-visible { outline: 1px solid var(--ghost); outline-offset: 3px; }
   button { font-family: inherit; cursor: pointer; }
 
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  h1 { margin: 0; font: 600 22px/1.1 var(--display); letter-spacing: .1em; text-transform: uppercase; }
-  .counter { font: 500 16px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ecto); }
-  .timeleft { font: 500 16px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--dim); }
+  /* Mlha, zrno a vinětace přes celou obrazovku */
+  .fx { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+  .fog { z-index: 1; overflow: hidden; }
+  .fog::before, .fog::after {
+    content: ""; position: absolute; inset: -40%;
+    background:
+      radial-gradient(38% 26% at 30% 60%, rgba(150, 175, 165, .10), transparent 70%),
+      radial-gradient(30% 22% at 70% 35%, rgba(150, 175, 165, .08), transparent 70%),
+      radial-gradient(45% 30% at 55% 80%, rgba(120, 140, 135, .07), transparent 70%);
+    filter: blur(20px); animation: drift 48s ease-in-out infinite alternate;
+  }
+  .fog::after { animation-duration: 71s; animation-direction: alternate-reverse; opacity: .8; transform: scale(1.2); }
+  @keyframes drift { from { transform: translate3d(-8%, 2%, 0) scale(1.1); } to { transform: translate3d(8%, -3%, 0) scale(1.25); } }
+  .grain {
+    opacity: .09; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    animation: grain .9s steps(4) infinite;
+  }
+  @keyframes grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-3%, 2%); } 50% { transform: translate(2%, -3%); } 75% { transform: translate(-2%, -1%); } 100% { transform: translate(0, 0); } }
+  .vignette { background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0, 0, 0, .75) 100%); }
 
+  .app { position: relative; z-index: 2; height: 100%; max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 10px; }
+
+  /* Hlavička: svíčky místo čísel, aby to pochopily i děti, které nečtou */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+  .candles { display: flex; gap: 10px; align-items: flex-end; }
+  .candle { width: 16px; height: 36px; display: block; }
+  .candle .flame { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; transition: opacity .8s; }
+  .candle.lit .flame { opacity: 1; animation: flicker 2.3s ease-in-out infinite; }
+  .candle.lit .halo { opacity: 1; }
+  .candle .halo { opacity: 0; transition: opacity .8s; }
+  @keyframes flicker { 0%, 100% { transform: scale(1, 1) rotate(0); } 20% { transform: scale(.94, 1.06) rotate(-2deg); } 45% { transform: scale(1.04, .95) rotate(1.5deg); } 70% { transform: scale(.97, 1.04) rotate(-1deg); } }
+  .timeleft { font: 400 15px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--dim); letter-spacing: .06em; }
+
+  /* Radar */
   .stagebox { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; }
   .radar {
     position: relative; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh);
     border-radius: 50%; overflow: hidden; border: 1px solid var(--line);
-    background: repeating-radial-gradient(circle at center, transparent 0 15%, rgba(95,227,207,.16) 15% 15.5%), #0a1215;
+    background:
+      repeating-radial-gradient(circle at center, transparent 0 19.6%, rgba(185, 214, 200, .07) 19.6% 20%),
+      radial-gradient(circle at center, #0b100e 0, #050706 72%);
+    box-shadow: inset 0 0 60px rgba(0, 0, 0, .9);
   }
-  .radar::before, .radar::after { content: ""; position: absolute; background: rgba(95,227,207,.14); }
+  .radar::before, .radar::after { content: ""; position: absolute; background: rgba(185, 214, 200, .06); }
   .radar::before { left: 50%; top: 0; bottom: 0; width: 1px; }
   .radar::after { top: 50%; left: 0; right: 0; height: 1px; }
   .sweep {
     position: absolute; inset: 0; border-radius: 50%;
-    background: conic-gradient(from 0deg, rgba(95,227,207,0) 0deg, rgba(95,227,207,0) 286deg, rgba(95,227,207,.45) 360deg);
-    animation: spin 3.2s linear infinite;
+    background: conic-gradient(from 0deg, transparent 0deg 300deg, rgba(185, 214, 200, .13) 360deg);
+    animation: spin 6s linear infinite;
   }
-  .radar.off .sweep { animation-play-state: paused; opacity: .15; }
+  .radar.off .sweep { animation-play-state: paused; opacity: .3; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .me { position: absolute; left: 50%; top: 50%; width: 3%; aspect-ratio: 1; margin: -1.5% 0 0 -1.5%; border-radius: 50%; background: var(--ecto); }
+  .me { position: absolute; left: 50%; top: 50%; width: 2.4%; aspect-ratio: 1; margin: -1.2% 0 0 -1.2%; border-radius: 50%; background: var(--fg); opacity: .7; box-shadow: 0 0 10px rgba(216, 214, 203, .5); }
+  .north { position: absolute; top: 3%; left: 50%; transform: translateX(-50%); font: 500 11px/1 var(--mono); letter-spacing: .2em; color: var(--faint); }
+
+  /* Světýlka (bludičky) na radaru */
   .dot {
-    position: absolute; width: 13%; aspect-ratio: 1; margin: -6.5% 0 0 -6.5%; padding: 0; border: 2px solid rgba(0,0,0,.35); border-radius: 50%;
-    display: none; place-items: center; background: var(--amber); color: #3a2400; font: 600 clamp(16px, 6cqmin, 28px)/1 var(--display);
-    box-shadow: 0 0 18px rgba(255,179,64,.75); transition: left .25s linear, top .25s linear;
+    position: absolute; width: 18%; aspect-ratio: 1; margin: -9% 0 0 -9%; padding: 0; border: 0; border-radius: 50%;
+    display: none; background: radial-gradient(circle, rgba(232, 240, 234, .95) 0 6%, rgba(185, 214, 200, .45) 16%, rgba(185, 214, 200, .12) 36%, transparent 62%);
+    transition: left .4s linear, top .4s linear, opacity .6s;
   }
-  .dot.pick { display: grid; cursor: pointer; animation: bob 1.3s ease-in-out infinite; }
-  .dot.tgt { display: grid; cursor: default; background: var(--hot); color: #fff; box-shadow: 0 0 24px var(--hot); animation: bob 1s ease-in-out infinite; }
-  .dot.tgt.here { animation: pulse .5s ease-in-out infinite; }
-  .dot.found { width: 9%; aspect-ratio: 1; margin: -4.5% 0 0 -4.5%; border-radius: 50%; display: grid; place-items: center; background: var(--ecto); color: #07201c; font-size: clamp(12px, 4cqmin, 20px); opacity: .7; }
-  @keyframes bob { 50% { transform: scale(1.12); } }
-  @keyframes pulse { 50% { transform: scale(1.35); } }
-  h1 .q { display: inline-grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--hot); color: #fff; font-size: 18px; letter-spacing: 0; }
-  .shamble { transform-origin: 50% 90%; animation: shamble 1.8s ease-in-out infinite; }
-  @keyframes shamble { 0%, 100% { transform: rotate(-3deg) translateX(-2%); } 40% { transform: rotate(2.5deg) translateX(2%); } 55% { transform: rotate(1deg) translateX(1%) translateY(1%); } }
-  .reveal.zom { background: radial-gradient(circle at 50% 40%, #1f2a16 0, #0b0d08 72%); }
-  .reveal.zom .boo { color: #9fd36b; text-shadow: 0 0 18px rgba(159,211,107,.5); }
-  .north { position: absolute; top: 3%; left: 50%; transform: translateX(-50%); font: 500 12px/1 var(--display); letter-spacing: .14em; color: var(--dim); }
+  .dot.pick { display: block; cursor: pointer; animation: wisp 3.4s ease-in-out infinite; }
+  .dot.pick:nth-of-type(2n) { animation-duration: 4.1s; animation-delay: -1.3s; }
+  .dot.pick:nth-of-type(3n) { animation-duration: 3.7s; animation-delay: -2.2s; }
+  .dot.tgt { display: block; cursor: default; width: 22%; margin: -11% 0 0 -11%; animation: wisp 2.6s ease-in-out infinite; }
+  .dot.tgt.near { background: radial-gradient(circle, rgba(250, 232, 220, .95) 0 6%, rgba(201, 164, 106, .5) 16%, rgba(168, 68, 58, .16) 38%, transparent 64%); animation-duration: 1.4s; }
+  .dot.found { display: block; width: 6%; margin: -3% 0 0 -3%; background: none; border: 1px solid rgba(185, 214, 200, .35); cursor: default; }
+  .dot.found::after { content: ""; position: absolute; inset: 35%; border-radius: 50%; background: rgba(201, 164, 106, .7); box-shadow: 0 0 6px rgba(201, 164, 106, .8); }
+  @keyframes wisp { 0%, 100% { opacity: .55; transform: scale(.9) translate(0, 0); } 30% { opacity: 1; transform: scale(1.05) translate(2%, -3%); } 60% { opacity: .7; transform: scale(.95) translate(-2%, 1%); } 80% { opacity: .95; } }
 
-  .info { display: flex; flex-direction: column; gap: 8px; }
+  /* Údaje */
+  .info { display: flex; flex-direction: column; gap: 6px; }
   .readout { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .value { font: 500 34px/1 var(--mono); font-variant-numeric: tabular-nums; }
-  .value small { font-size: 15px; color: var(--dim); margin-left: 4px; }
-  .state { font: 500 14px/1.2 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); text-align: right; }
-  .state.warn { color: var(--amber); }
-  .state.alert { color: var(--hot); }
-  .leds { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; align-items: end; height: 40px; }
-  .led { height: calc(14px + var(--i) * 6.5px); border-radius: 5px; background: var(--led-off); transition: background .12s, box-shadow .12s; }
-  .led:nth-child(1), .led:nth-child(2) { --c: #4be08a; }
-  .led:nth-child(3) { --c: #ffc23d; }
-  .led:nth-child(4) { --c: #ff8a3d; }
-  .led:nth-child(5) { --c: #ff4f45; }
-  .led.on { background: var(--c); box-shadow: 0 0 14px var(--c); }
-  .say { margin: 0; min-height: 4.2em; font-size: 17px; line-height: 1.4; text-wrap: pretty; }
-  .dirhint { margin: 0; font: 400 12px/1.4 var(--mono); color: var(--dim); min-height: 2.8em; }
+  .value { font: 400 32px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+  .value small { font-size: 14px; color: var(--dim); margin-left: 4px; }
+  .state { font: italic 500 19px/1.2 var(--serif); color: var(--dim); text-align: right; }
+  .state.warn { color: var(--ember); }
+  .state.alert { color: #d07a6e; }
+  .meter { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; height: 10px; }
+  .meter i { border-radius: 1px; background: rgba(190, 205, 195, .07); transition: background .3s, box-shadow .3s; }
+  .meter i.on { background: rgba(185, 214, 200, .7); box-shadow: 0 0 8px rgba(185, 214, 200, .4); }
+  .meter i.on:nth-child(n+7) { background: var(--ember); box-shadow: 0 0 8px rgba(201, 164, 106, .5); }
+  .meter i.on:nth-child(n+9) { background: var(--blood); box-shadow: 0 0 10px rgba(168, 68, 58, .6); }
+  .say { margin: 0; min-height: 3em; font: italic 500 20px/1.35 var(--serif); color: var(--fg); text-wrap: pretty; }
+  .dirhint { margin: 0; font: 400 11px/1.4 var(--mono); color: var(--faint); min-height: 1.4em; letter-spacing: .03em; }
 
-  .ctl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  /* Tlačítka jen s ikonami */
+  .ctl { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 8px; }
   .btn {
-    min-width: 0; padding: 14px 6px; border-radius: 12px; border: 1px solid var(--line);
-    background: var(--panel-2); color: var(--fg); font: 500 14px/1.15 var(--display); letter-spacing: .06em; text-transform: uppercase;
+    min-width: 0; display: grid; place-items: center; padding: 14px 6px; border-radius: 14px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); transition: opacity .3s, border-color .3s, box-shadow .3s;
   }
-  .btn.primary { grid-column: span 2; background: var(--ecto); color: #07201c; border-color: var(--ecto); font-size: 17px; }
-  /* tlačítka jen s ikonou, pro děti, které ještě nečtou */
-  .btn.ico { font: 400 30px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; padding: 12px 6px; letter-spacing: 0; text-transform: none; }
-  .btn.primary.ico { font-size: 38px; }
-  #catch:not(:disabled) { animation: grab .7s ease-in-out infinite; box-shadow: 0 0 22px var(--ecto); }
-  @keyframes grab { 50% { transform: scale(1.06); } }
-  .btn[aria-pressed="false"] { filter: grayscale(1); opacity: .5; }
-  .btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .btn:disabled { opacity: .4; cursor: default; }
-  .btn[aria-pressed="false"] { color: var(--dim); }
+  .btn svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .btn .fill { fill: currentColor; stroke: none; }
+  .btn:disabled { opacity: .28; cursor: default; }
+  .btn.primary { border-color: rgba(185, 214, 200, .35); color: var(--ghost); }
+  .btn.primary svg { width: 34px; height: 34px; }
+  #catch:not(:disabled) { color: #f2e6d8; border-color: rgba(201, 164, 106, .7); box-shadow: 0 0 28px rgba(201, 164, 106, .35), inset 0 0 18px rgba(201, 164, 106, .15); animation: breathe 1.6s ease-in-out infinite; }
+  @keyframes breathe { 50% { box-shadow: 0 0 40px rgba(201, 164, 106, .55), inset 0 0 24px rgba(201, 164, 106, .25); } }
+  .btn[aria-pressed="false"] { color: var(--faint); }
   .testbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 
-  /* Úvodní obrazovka */
-  .intro {
-    position: fixed; inset: 0; z-index: 20; background: var(--bg);
-    padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
-    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-    display: flex; flex-direction: column; justify-content: center; overflow: auto;
-  }
-  .intro-in { max-width: 520px; width: 100%; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
-  .intro h2 { margin: 0; font: 600 34px/1.05 var(--display); letter-spacing: .08em; text-transform: uppercase; text-wrap: balance; }
-  .intro p { margin: 0; color: var(--dim); }
-  .intro .rules { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--fg); font-size: 15px; }
-  .intro .rules b { font: 500 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
-  .intro .safe { border-color: var(--amber); }
-  .intro .btns { display: flex; flex-direction: column; gap: 10px; }
-  .voicerow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
-  .voicerow span { font: 500 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
-  .voicerow select { flex: 1; min-width: 0; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); font: inherit; font-size: 15px; }
-  .intro .btn { padding: 16px 12px; font-size: 17px; }
-  .intro .btn.ico { font-size: 34px; padding: 14px 12px; }
-  .intro .btn.primary.ico { font-size: 46px; padding: 18px 12px; }
-  .intro .btn.primary { grid-column: auto; }
-  .msg { min-height: 2.8em; font-size: 14px; color: var(--amber); }
-
-  /* Duchové: avatar v hlavičce, výběr, odhalení */
-  h1 { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; }
-  h1 svg { width: 28px; height: 32px; flex: none; }
-  .ghost .eyes { transform-box: fill-box; transform-origin: center; animation: blink 4.2s infinite; }
-  @keyframes blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
-  .float { animation: float 2.6s ease-in-out infinite; }
-  @keyframes float { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-7%) rotate(4deg); } }
-
+  /* Úvod a obrazovka nálezu */
   .overlay {
-    position: fixed; inset: 0; z-index: 15; background: var(--bg);
-    padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
-    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    position: fixed; inset: 0; z-index: 20; background: radial-gradient(ellipse at 50% 35%, #0d1311 0, var(--bg) 70%);
+    padding-block: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
     display: flex; flex-direction: column; overflow: auto;
   }
-  .overlay-in { max-width: 560px; width: 100%; margin: auto; display: flex; flex-direction: column; gap: 14px; }
-  .overlay h2 { margin: 0; font: 600 28px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; text-wrap: balance; }
-  .overlay p { margin: 0; color: var(--dim); }
-  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .gcard {
-    display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px 10px;
-    border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--fg);
+  .overlay-in { position: relative; z-index: 2; max-width: 500px; width: 100%; margin: auto; display: flex; flex-direction: column; gap: 16px; }
+  .intro h1 { margin: 0; font: 500 52px/1 var(--serif); letter-spacing: .02em; color: var(--fg); animation: dim 7s ease-in-out infinite; }
+  @keyframes dim { 0%, 100% { opacity: 1; } 46% { opacity: 1; } 48% { opacity: .55; } 50% { opacity: .95; } 52% { opacity: .7; } 54% { opacity: 1; } }
+  .intro .sub { margin: -6px 0 0; font: italic 500 21px/1.3 var(--serif); color: var(--dim); }
+  .intro p { margin: 0; color: var(--dim); font-size: 17px; }
+  .note { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-left: 1px solid rgba(201, 164, 106, .5); background: rgba(16, 20, 19, .5); font-size: 16px; color: var(--fg); }
+  .note b { font: 500 10px/1.4 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--ember); }
+  .btns { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .intro .btn.primary { padding: 20px 12px; }
+  .intro .btn.primary svg { width: 44px; height: 44px; }
+  .voicerow { display: flex; align-items: center; gap: 10px; }
+  .voicerow span { font: 500 10px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+  .voicerow select { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(16, 20, 19, .8); color: var(--fg); font: 15px/1.3 var(--serif); }
+  .msg { min-height: 2.6em; font: italic 500 16px/1.4 var(--serif); color: var(--ember); }
+
+  .reveal { text-align: center; background: radial-gradient(ellipse at 50% 40%, #0a0e0c 0, #020303 70%); }
+  .reveal .overlay-in { align-items: center; gap: 18px; }
+  .eyes { width: min(64vw, 300px); height: auto; opacity: 0; animation: eyesIn 4.5s ease-out .5s forwards; }
+  .eyes .lid { transform-box: fill-box; transform-origin: center; animation: blink 5.5s ease-in-out 2.4s infinite; }
+  @keyframes eyesIn { 0% { opacity: 0; transform: translateY(6px) scale(.96); } 35% { opacity: .9; } 100% { opacity: .75; transform: none; } }
+  @keyframes blink { 0%, 90%, 100% { transform: scaleY(1); } 93%, 95% { transform: scaleY(.05); } }
+  .reveal h2 { margin: 0; font: italic 500 40px/1.1 var(--serif); color: var(--fg); opacity: 0; animation: rise 1.6s ease-out .2s forwards; }
+  .reveal .quote { margin: 0; font: 500 20px/1.4 var(--serif); color: var(--dim); max-width: 22em; opacity: 0; animation: rise 1.6s ease-out 1s forwards; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .score { display: flex; gap: 22px; justify-content: center; align-items: flex-end; }
+  .score .candle { width: 26px; height: 58px; }
+  .reveal .btn { width: 100%; max-width: 340px; padding: 18px 12px; opacity: 0; animation: rise 1s ease-out 1.8s forwards; }
+  .reveal .btn svg { width: 36px; height: 36px; }
+  .time { font: 400 15px/1 var(--mono); color: var(--dim); letter-spacing: .08em; }
+
+  @media (max-height: 640px) { .say { min-height: 2.6em; font-size: 17px; } .value { font-size: 26px; } .intro h1 { font-size: 40px; } }
+  @media (prefers-reduced-motion: reduce) {
+    .fog::before, .fog::after, .grain, .sweep, .dot, .candle .flame, .intro h1, #catch, .eyes .lid { animation: none !important; }
+    .eyes, .reveal h2, .reveal .quote, .reveal .btn { animation: none !important; opacity: 1; }
   }
-  .gcard svg { width: 64px; height: 80px; }
-  .gcard b { font: 500 17px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
-  .gcard span { font: 400 13px/1.2 var(--mono); color: var(--dim); }
-  .gcard:not(:disabled):active { transform: scale(.97); }
-  .gcard:disabled { cursor: default; opacity: .55; }
-  .gcard:disabled svg { filter: grayscale(.7); }
-  .gcard:disabled span { color: var(--ecto); }
-
-  .reveal { background: radial-gradient(circle at 50% 40%, #1d2a3a 0, var(--bg) 70%); text-align: center; }
-  .reveal .overlay-in { align-items: center; }
-  .stage { position: relative; width: min(70vw, 42vh); aspect-ratio: 120 / 150; }
-  .stage .pop { position: absolute; inset: 0; animation: pop .9s cubic-bezier(.2,1.4,.4,1) both; }
-  .stage .pop svg { width: 100%; height: 100%; filter: drop-shadow(0 0 28px var(--glow, #fff)); }
-  @keyframes pop { 0% { transform: scale(.05) rotate(-40deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
-  .spark { position: absolute; left: 50%; top: 45%; font-size: 26px; color: var(--amber); pointer-events: none; animation: burst 1.2s ease-out both; }
-  @keyframes burst { 0% { transform: translate(-50%, -50%) scale(.2); opacity: 1; } 100% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1); opacity: 0; } }
-  .reveal .boo { font: 600 42px/1 var(--display); letter-spacing: .08em; color: var(--glow, var(--ecto)); text-transform: uppercase; }
-  .reveal .quote { font-size: 19px; line-height: 1.4; color: var(--fg); max-width: 26em; text-wrap: pretty; }
-  .reveal .btn { width: 100%; max-width: 360px; padding: 16px 12px; font-size: 17px; }
-  .reveal .btn.ico { font-size: 44px; }
-  .found-ico { font: 400 min(42vw, 26vh)/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; animation: pop .9s cubic-bezier(.2,1.4,.4,1) both, look 2.4s .9s ease-in-out infinite; }
-  @keyframes look { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6%) rotate(-6deg); } 75% { transform: translateX(6%) rotate(6deg); } }
-  #stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  .score { display: flex; gap: 12px; justify-content: center; }
-  .score i { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); font-style: normal; display: grid; place-items: center; font-size: 20px; }
-  .score i.on { background: var(--ecto); border-color: var(--ecto); color: #07201c; }
-  .reveal .btn.primary { grid-column: auto; }
-  .troupe { display: flex; justify-content: center; gap: 2%; width: 100%; }
-  .troupe .pop { position: static; flex: 1 1 0; max-width: 90px; }
-  .troupe svg { width: 100%; height: auto; }
-
-  @media (max-height: 640px) { .say { min-height: 3em; font-size: 15px; } .leds { height: 30px; } .value { font-size: 28px; } }
-  @media (prefers-reduced-motion: reduce) { .sweep, .float, .ghost .eyes, .stage .pop, .spark { animation: none; } .led, .dot { transition: none; } .dot, .shamble, .found-ico, #catch { animation: none !important; } }
 </style>
 </head>
 <body>
+<div class="fx fog" aria-hidden="true"></div>
+
 <main class="app">
   <header class="top">
-    <h1 id="title">Detektor duchů</h1>
-    <div class="counter" id="counter">0/3</div>
+    <div class="candles" id="candles" role="img" aria-label="Nalezeno 0 ze 3"></div>
     <div class="timeleft" id="time">0:00</div>
   </header>
 
   <div class="stagebox">
     <div class="radar off" id="radar">
-      <div class="sweep"></div>
-      <div class="north" id="north">N</div>
-      <div class="me"></div>
+      <div class="sweep" aria-hidden="true"></div>
+      <div class="north" id="north" aria-hidden="true">N</div>
+      <div class="me" aria-hidden="true"></div>
     </div>
   </div>
 
   <div class="info">
-    <div class="readout"><div class="value" id="value">--<small>m</small></div><div class="state" id="state">Čeká na start</div></div>
-    <div class="leds" aria-hidden="true"><span class="led" style="--i:0"></span><span class="led" style="--i:1"></span><span class="led" style="--i:2"></span><span class="led" style="--i:3"></span><span class="led" style="--i:4"></span></div>
+    <div class="readout"><div class="value" id="value">--<small>m</small></div><div class="state" id="state"></div></div>
+    <div class="meter" id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <p class="say" id="say" aria-live="polite"></p>
     <p class="dirhint" id="dirhint"></p>
   </div>
 
   <div class="ctl">
-    <button class="btn primary ico" id="catch" type="button" disabled aria-label="Chyť strašidlo" title="Chyť strašidlo">✋</button>
-    <button class="btn ico" id="newgame" type="button" aria-label="Nová hra" title="Nová hra">🔄</button>
-    <button class="btn ico" id="sound" type="button" aria-pressed="true" aria-label="Zvuk" title="Zvuk">🔊</button>
-    <button class="btn ico" id="voice" type="button" aria-pressed="true" aria-label="Hlas" title="Hlas">🗣️</button>
-    <button class="btn ico" id="fs" type="button" aria-label="Celá obrazovka" title="Celá obrazovka">⛶</button>
+    <button class="btn primary" id="catch" type="button" disabled aria-label="Chyť strašidlo" title="Chyť strašidlo"><svg viewBox="0 0 24 24"><path d="M7 12V6.6a1.4 1.4 0 0 1 2.8 0V11 M9.8 10.5V4.4a1.4 1.4 0 0 1 2.8 0v6 M12.6 10.4V5.4a1.4 1.4 0 0 1 2.8 0v5.4 M15.4 11V8.2a1.4 1.4 0 0 1 2.8 0V14c0 4-2.8 7-6.6 7h-.9c-2.3 0-3.7-.9-5-2.7l-2.6-3.7a1.4 1.4 0 0 1 2.2-1.8L7 14.6"/></svg></button>
+    <button class="btn" id="newgame" type="button" aria-label="Nová hra" title="Nová hra"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.6-5.9 M4 4.5v4.6h4.6"/></svg></button>
+    <button class="btn" id="sound" type="button" aria-pressed="true" aria-label="Zvuk" title="Zvuk"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path class="on" d="M15.5 9a4.2 4.2 0 0 1 0 6 M18 6.5a7.8 7.8 0 0 1 0 11"/><path class="off" d="M16 9.5l5 5 M21 9.5l-5 5" hidden/></svg></button>
+    <button class="btn" id="voice" type="button" aria-pressed="true" aria-label="Hlas" title="Hlas"><svg viewBox="0 0 24 24"><path d="M5 18.5V8.6A4.6 4.6 0 0 1 9.6 4h4.8A4.6 4.6 0 0 1 19 8.6v3.8a4.6 4.6 0 0 1-4.6 4.6H9z"/><path class="on" d="M9 9.5v3 M12 8.3v5.4 M15 9.5v3"/><path class="off" d="M4 4l16 16" hidden/></svg></button>
+    <button class="btn" id="fs" type="button" aria-label="Celá obrazovka" title="Celá obrazovka"><svg viewBox="0 0 24 24"><path class="on" d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5"/><path class="off" d="M9 4v5H4 M15 4v5h5 M9 20v-5H4 M15 20v-5h5" hidden/></svg></button>
   </div>
   <div class="testbar" id="testbar" hidden>
-    <button class="btn ico" id="tl" type="button" aria-label="Otočit doleva" title="Otočit doleva">↶</button>
-    <button class="btn ico" id="tf" type="button" aria-label="Krok 3 m" title="Krok 3 m">👣</button>
-    <button class="btn ico" id="tr" type="button" aria-label="Otočit doprava" title="Otočit doprava">↷</button>
+    <button class="btn" id="tl" type="button" aria-label="Otočit doleva" title="Otočit doleva"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5 M4 9h9.5a6.5 6.5 0 0 1 0 13H11"/></svg></button>
+    <button class="btn" id="tf" type="button" aria-label="Krok 3 m" title="Krok 3 m"><svg viewBox="0 0 24 24"><path d="M12 20V5 M6.5 10.5L12 5l5.5 5.5"/></svg></button>
+    <button class="btn" id="tr" type="button" aria-label="Otočit doprava" title="Otočit doprava"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5 M20 9h-9.5a6.5 6.5 0 0 0 0 13H13"/></svg></button>
   </div>
 </main>
 
-<section class="intro" id="intro">
-  <div class="intro-in">
-    <h2>Lovci duchů</h2>
-    <p>Telefon kolem tebe schová tři strašidla, do 50 metrů. Na radaru se objeví tři tečky. Ťukni na jednu a jdi k ní. Kdo v ní je, uvidíš, až ho najdeš. Může to být veselý duch, nebo zombie!</p>
-    <div class="rules safe"><b>Bezpečí</b><span>Hrajte jen na bezpečném místě, daleko od silnice. Domluvte si hranice hřiště a čas návratu.</span></div>
-    <div class="rules"><b>Potřebuješ</b><span>Zapnutou polohu (GPS) a povolit kompas. Venku pod širým nebem to funguje nejlépe.</span></div>
+<section class="overlay intro" id="intro">
+  <div class="overlay-in">
+    <h1>Lovci duchů</h1>
+    <p class="sub">Venku, za šera, poslouchej.</p>
+    <p>Telefon kolem tebe ukryje tři strašidla, do padesáti metrů. Na radaru se rozsvítí tři světýlka. Ťukni na jedno a jdi za ním. Až budeš blízko, uslyšíš ho. Co to bylo, se nedozvíš. Jen že je někde tady.</p>
+    <div class="note"><b>Pro dospělé</b><span>Hrajte jen na bezpečném místě, daleko od silnice. Domluvte si hranice a čas návratu. Je potřeba zapnutá poloha (GPS) a povolený kompas.</span></div>
     <div class="btns">
-      <button class="btn primary ico" id="begin" type="button" aria-label="Hledat strašidla" title="Hledat strašidla">▶️</button>
-      <button class="btn ico" id="resume" type="button" hidden aria-label="Pokračovat v rozehrané hře" title="Pokračovat v rozehrané hře">⏯️</button>
+      <button class="btn primary" id="begin" type="button" aria-label="Hledat strašidla" title="Hledat strašidla"><svg viewBox="0 0 24 24"><path class="fill" d="M8 5.5v13l10.5-6.5z"/></svg></button>
+      <button class="btn" id="resume" type="button" hidden aria-label="Pokračovat v rozehrané hře" title="Pokračovat v rozehrané hře"><svg viewBox="0 0 24 24"><path class="fill" d="M5 6v12l8-6z"/><path d="M16 6v12 M19.5 6v12"/></svg></button>
       <div class="btnrow">
-        <button class="btn ico" id="testbtn" type="button" aria-label="Zkouška doma bez GPS" title="Zkouška doma bez GPS">🏠</button>
-        <button class="btn ico" id="sndtest" type="button" aria-label="Test zvuku" title="Test zvuku">🔊</button>
+        <button class="btn" id="testbtn" type="button" aria-label="Zkouška doma bez GPS" title="Zkouška doma bez GPS"><svg viewBox="0 0 24 24"><path d="M3.5 11.5L12 4.5l8.5 7 M6 10v9.5h12V10 M10 19.5v-5h4v5"/></svg></button>
+        <button class="btn" id="sndtest" type="button" aria-label="Test zvuku" title="Test zvuku"><svg viewBox="0 0 24 24"><path d="M8 10a4.5 4.5 0 1 1 9 0c0 3.2-3.2 3.8-3.2 7a2.6 2.6 0 0 1-5.2.2 M10.5 10a2 2 0 1 1 4 0"/></svg></button>
       </div>
       <label class="voicerow" id="voicerow" hidden><span>Hlas</span><select id="voicesel" aria-label="Hlas vypravěče"></select></label>
     </div>
@@ -253,131 +248,68 @@
 
 <section class="overlay reveal" id="reveal" hidden>
   <div class="overlay-in">
-    <div class="boo" id="boo">Bú!</div>
-    <div class="stage" id="stage"></div>
+    <div id="stage"></div>
     <h2 id="rname"></h2>
     <p class="quote" id="rquote"></p>
-    <button class="btn primary ico" id="rnext" type="button" aria-label="Dál" title="Dál">▶️</button>
+    <div class="score" id="score" aria-hidden="true"></div>
+    <button class="btn primary" id="rnext" type="button" aria-label="Dál" title="Dál"></button>
   </div>
 </section>
+
+<div class="fx grain" aria-hidden="true"></div>
+<div class="fx vignette" aria-hidden="true"></div>
 
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
-  var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var rnd = function (a, b) { return a + Math.random() * (b - a); };
   var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
   var N = 3, SAVE_KEY = "lovci-duchu-gps-3";
 
-  /* ---------- Duchové ---------- */
+  /* Strašidla: dva duchové a tři zombie. Neukazují se, liší se jen zvukem. */
   var CHARS = [
-    { type: "ghost", name: "Kvído", body: "#eef3ff", glow: "#a9c4ff", acc: "hat", hoo: 330, je: "je chycený", line: "Bú! Jsem Kvído. Tak tohle bylo rychlé, ty jsi ale lovec!" },
-    { type: "ghost", name: "Bublina", body: "#ffd3ea", glow: "#ff8fc8", acc: "bow", hoo: 520, je: "je chycená", line: "Hihi, mám tě! Jsem Bublina a schovávám se nejradši ze všech." },
-    { type: "zombie", name: "Zombie Hugo", v: "hugo", glow: "#9fd36b", hoo: 92, je: "je chycený", skin: ["#b3bd9f", "#7f8c69", "#3f4a33"], rot: [.27, .3, .12], seed: 7, line: "Grrr… Kdo mě to vzbudil? Oko jsem někde ztratil, ale tebe vidím dobře." },
-    { type: "zombie", name: "Zombie Ota", v: "ota", glow: "#c9b98a", hoo: 110, je: "je chycený", skin: ["#bdb6a5", "#8a8172", "#4a4238"], rot: [.32, .24, .14], seed: 11, line: "Uááá… Mozečky! Ach tak, to jsi jen ty. Tak dobře, máš mě." },
-    { type: "zombie", name: "Zombie Berta", v: "berta", glow: "#a9b8d6", hoo: 128, je: "je chycená", skin: ["#c3c6c4", "#8d95a1", "#4d5463"], rot: [.25, .27, .3], seed: 5, line: "Hrrr… Já jsem Berta. Sto let jsem se nečesala, a stejně mě máš." }
+    { type: "ghost", hoo: 330 }, { type: "ghost", hoo: 440 },
+    { type: "zombie", hoo: 92 }, { type: "zombie", hoo: 110 }, { type: "zombie", hoo: 128 }
   ];
-  var zid = 0;
-  function zombieSVG(c, cls) {
-    var u = "z" + (++zid), s = c.skin, v = c.v;
-    var head = "M31 50 C29 21 44 7 60 7 C77 7 92 21 90 50 C89 66 87 78 81 88 C75 98 68 104 60 104 C52 104 44 98 39 89 C33 79 32 66 31 50 Z";
-    var eye = function (x, gone) {
-      if (gone) return '<ellipse cx="' + x + '" cy="53" rx="7.5" ry="5.6" fill="#0c0605"/><ellipse cx="' + x + '" cy="54.5" rx="5" ry="3" fill="#2a0c08" opacity=".9"/><circle cx="' + (x + 1.5) + '" cy="53" r=".9" fill="#ff5a3a" opacity=".8"/>';
-      return '<ellipse cx="' + x + '" cy="53" rx="6.8" ry="4.3" fill="url(#' + u + 'sc)"/>' +
-        '<path d="M' + (x - 6) + ' 53 q2 -1 3.2 .4 M' + (x + 6) + ' 52.6 q-2.2 -.6 -3.4 .8 M' + (x - 5) + ' 55 q2 .2 3 -1" stroke="#a3271d" stroke-width=".45" fill="none" opacity=".85"/>' +
-        '<circle cx="' + x + '" cy="53.2" r="2.9" fill="url(#' + u + 'ir)"/><circle cx="' + x + '" cy="53.2" r=".9" fill="#5b5f58" opacity=".7"/>' +
-        '<circle cx="' + (x + 1.1) + '" cy="52" r=".6" fill="#fff" opacity=".8"/>' +
-        '<path d="M' + (x - 7) + ' 51.5 Q' + x + ' 47.5 ' + (x + 7) + ' 51.5" stroke="#2a1e17" stroke-width="1.6" fill="none" opacity=".75"/>' +
-        '<path d="M' + (x - 6.6) + ' 55.2 Q' + x + ' 58.3 ' + (x + 6.6) + ' 55.2" stroke="#3a2a22" stroke-width="1" fill="none" opacity=".6"/>';
-    };
-    var teeth = "";
-    [[48.5, 87.2, 3, 4.2], [51.8, 86.3, 3.2, 5], [55.3, 85.8, 3.3, 5.6], [62.2, 85.8, 3.2, 4.4], [65.6, 86.4, 3, 5.4], [68.8, 87.3, 2.8, 3.8]].forEach(function (t, k) {
-      teeth += '<rect x="' + t[0] + '" y="' + t[1] + '" width="' + t[2] + '" height="' + t[3] + '" rx="1" fill="' + (k % 3 ? "#cdbf92" : "#a8925e") + '" stroke="#5c4a2c" stroke-width=".4" transform="rotate(' + (k * 7 % 11 - 5) + ' ' + t[0] + ' ' + t[1] + ')"/>';
-    });
-    teeth += '<rect x="50" y="94" width="3" height="3.4" rx="1" fill="#b9a878" stroke="#5c4a2c" stroke-width=".4"/><rect x="58" y="94.6" width="3.2" height="3" rx="1" fill="#9f8a58" stroke="#5c4a2c" stroke-width=".4"/><rect x="64" y="94" width="2.8" height="3.4" rx="1" fill="#c3b384" stroke="#5c4a2c" stroke-width=".4"/>';
-    var hair = "";
-    if (v === "hugo") hair = '<path d="M34 34 C38 16 52 9 62 10 C76 10 86 20 88 34 C82 24 74 19 62 20 C50 20 41 25 34 34 Z" fill="#241d17" opacity=".92"/><path d="M40 24 l-3 -6 M46 18 l-1 -7 M55 14 l1 -6 M66 14 l3 -6 M76 18 l4 -5" stroke="#241d17" stroke-width="1.4"/>';
-    if (v === "ota") hair = '<path d="M38 30 c2 -10 6 -14 8 -18 M44 22 c1 -8 3 -10 6 -12 M78 26 c-1 -8 -4 -12 -8 -14 M83 36 c0 -8 -2 -12 -5 -15" stroke="#3b342c" stroke-width="1" fill="none"/>';
-    if (v === "berta") hair = '<path d="M30 60 C24 30 40 6 60 6 C82 6 96 28 90 62 C92 80 96 100 99 116 C92 104 88 88 87 70 C86 42 78 22 62 20 C46 22 36 38 35 66 C34 88 28 104 22 116 C25 98 30 82 30 60 Z" fill="#3a3530"/><path d="M33 40 C28 70 26 96 21 118 M37 36 C34 66 33 92 30 112 M88 40 C92 70 94 96 100 118 M84 34 C88 64 89 90 92 112 M46 20 C40 30 38 40 38 52 M74 20 C80 30 82 40 83 50" stroke="#55504a" stroke-width=".8" fill="none" opacity=".8"/>';
-    var marks = "";
-    if (v === "hugo") marks = '<path d="M42 30 C52 26 66 25 80 31" stroke="#5a1d14" stroke-width="2.2" fill="none"/>' +
-      '<path d="M45 26 l-1 8 M51 24.6 l-.6 8 M57 24 l0 8 M63 24 l.4 8 M69 24.6 l.8 8 M75 26.4 l1 8" stroke="#1d1410" stroke-width="1"/>' +
-      '<ellipse cx="80" cy="76" rx="6" ry="4.5" fill="url(#' + u + 'wd)"/>';
-    if (v === "ota") marks = '<path d="M74 74 C80 70 87 72 86 80 C85 87 78 90 73 86 C70 83 70 77 74 74 Z" fill="url(#' + u + 'wd)"/>' +
-      '<path d="M75 80 l2.4 -.4 l.2 2.4 l2.6 -.3 l.1 2.2 l2.4 -.4" stroke="#d6c7a0" stroke-width="1.1" fill="none"/>' +
-      '<path d="M88 46 c4 2 6 8 4 14 c-3 -2 -5 -6 -4 -14 Z" fill="#3a1410"/>';
-    if (v === "berta") marks = '<path d="M50 28 C56 24 62 26 64 31 C60 35 53 35 50 28 Z" fill="url(#' + u + 'wd)"/><path d="M43 62 C45 68 46 74 44 80" stroke="#4d1712" stroke-width="1.2" fill="none" opacity=".8"/>';
-    var nose = v === "ota"
-      ? '<path d="M56 62 Q60 60 64 62 L66 75 Q60 79 54 75 Z" fill="url(#' + u + 'sk)"/><path d="M57 70 L60 64 L63 70 L62 76 Q60 77 58 76 Z" fill="#160806"/>'
-      : '<path d="M58 57 Q56 68 53 75 Q56 79 60 78 Q64 79 67 75 Q64 68 62 57" fill="rgba(0,0,0,.14)"/><path d="M55 75 q2 1.8 4 0 M61 75 q2 1.8 4 0" stroke="#1d120d" stroke-width="1.5" fill="none"/>';
-    return '<svg class="zombie ' + (cls || "") + '" viewBox="0 -10 120 150" aria-hidden="true">' +
-      '<defs>' +
-      '<radialGradient id="' + u + 'sk" cx="44%" cy="38%" r="70%"><stop offset="0" stop-color="' + s[0] + '"/><stop offset=".55" stop-color="' + s[1] + '"/><stop offset="1" stop-color="' + s[2] + '"/></radialGradient>' +
-      '<radialGradient id="' + u + 'sc" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#e6dfb8"/><stop offset=".7" stop-color="#c7b98a"/><stop offset="1" stop-color="#8a5a44"/></radialGradient>' +
-      '<radialGradient id="' + u + 'ir" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#d9ddd2"/><stop offset=".7" stop-color="#aab3a4"/><stop offset="1" stop-color="#6d7569"/></radialGradient>' +
-      '<radialGradient id="' + u + 'so" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#140c08" stop-opacity=".95"/><stop offset=".6" stop-color="#2a1a12" stop-opacity=".6"/><stop offset="1" stop-color="#2a1a12" stop-opacity="0"/></radialGradient>' +
-      '<radialGradient id="' + u + 'wd" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#8a1a12"/><stop offset=".5" stop-color="#4a0806"/><stop offset="1" stop-color="#1e0302"/></radialGradient>' +
-      '<linearGradient id="' + u + 'sh" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset=".55" stop-color="#000" stop-opacity=".05"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient>' +
-      '<clipPath id="' + u + 'cl"><path d="' + head + '"/></clipPath>' +
-      '<filter id="' + u + 'rot" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".055" numOctaves="3" seed="' + c.seed + '"/><feColorMatrix values="0 0 0 0 ' + c.rot[0] + '  0 0 0 0 ' + c.rot[1] + '  0 0 0 0 ' + c.rot[2] + '  2.4 0 0 0 -1.05"/></filter>' +
-      '<filter id="' + u + 'pore" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="3"/><feColorMatrix values="0 0 0 0 .1  0 0 0 0 .08  0 0 0 0 .06  1.3 0 0 0 -.5"/></filter>' +
-      '<filter id="' + u + 'bl"><feGaussianBlur stdDeviation="2.2"/></filter>' +
-      '</defs>' +
-      '<path d="M6 140 C8 121 27 113 45 112 L75 112 C93 113 112 121 114 140 Z" fill="#35302a"/>' +
-      '<path d="M6 140 C8 121 27 113 45 112 L52 112 L56 124 L60 116 L64 126 L68 112 L75 112 C93 113 112 121 114 140 Z" fill="#2a2520" opacity=".9"/>' +
-      '<path d="M22 130 l6 -3 l-2 6 Z M92 128 l5 3 l-6 2 Z" fill="#14110e"/>' +
-      '<path d="M48 96 L46 116 Q60 122 74 116 L72 96 Z" fill="' + s[2] + '"/>' +
-      '<path d="M48 104 Q60 110 72 104" stroke="#000" stroke-opacity=".3" stroke-width="3" fill="none" filter="url(#' + u + 'bl)"/>' +
-      '<ellipse cx="30" cy="57" rx="5" ry="10" fill="' + s[1] + '"/><ellipse cx="90" cy="57" rx="5" ry="10" fill="' + s[2] + '"/>' +
-      '<path d="' + head + '" fill="url(#' + u + 'sk)"/>' +
-      '<g clip-path="url(#' + u + 'cl)">' +
-        '<rect x="20" y="0" width="80" height="110" filter="url(#' + u + 'rot)" opacity=".85"/>' +
-        '<rect x="20" y="0" width="80" height="110" filter="url(#' + u + 'pore)" opacity=".55"/>' +
-        '<g filter="url(#' + u + 'bl)" fill="#1c1a12" opacity=".45"><ellipse cx="41" cy="76" rx="6" ry="9"/><ellipse cx="79" cy="76" rx="6" ry="9"/><ellipse cx="60" cy="42" rx="20" ry="3"/></g>' +
-        '<rect x="20" y="0" width="80" height="110" fill="url(#' + u + 'sh)"/>' +
-        '<ellipse cx="46" cy="53.5" rx="11" ry="8.5" fill="url(#' + u + 'so)"/><ellipse cx="74" cy="53.5" rx="11" ry="8.5" fill="url(#' + u + 'so)"/>' +
-      '</g>' +
-      hair + marks + eye(46, v === "hugo") + eye(74, false) + nose +
-      '<path d="M45 86 Q52 83 60 84 Q68 83 75 86 Q73 96 66 99 Q60 101 54 99 Q47 96 45 86 Z" fill="#160604"/>' +
-      '<path d="M46 86.5 Q60 84 74 86.5 L74 88.5 Q60 86.5 46 88.5 Z" fill="#5a1d18"/>' + teeth +
-      '<path d="M45 86 Q52 83 60 84 Q68 83 75 86" stroke="#3a1e1a" stroke-width="1.4" fill="none"/>' +
-      '<path d="M47 95 Q54 100 60 100 Q66 100 73 95" stroke="#4a2a24" stroke-width="1.2" fill="none" opacity=".8"/>' +
-      '<path d="M66 99 q1 6 -1 10" stroke="#9fae8f" stroke-width="1.1" fill="none" opacity=".5"/>' +
-      '</svg>';
-  }
-  function ghostSVG(i, cls) {
-    var c = CHARS[i], a = "";
-    if (c.type === "zombie") return zombieSVG(c, cls === "float" ? "shamble" : cls);
-    if (c.acc === "hat") a = '<rect x="32" y="16" width="56" height="7" rx="3" fill="#2a2d3a"/><rect x="42" y="-6" width="36" height="24" rx="3" fill="#2a2d3a"/><rect x="42" y="11" width="36" height="5" fill="#ff5a4f"/>';
-    if (c.acc === "bow") a = '<path d="M84 24 L66 12 L66 36 Z M84 24 L102 12 L102 36 Z" fill="#ff4f9a"/><circle cx="84" cy="24" r="6" fill="#d9327a"/>';
-    if (c.acc === "glasses") a = '<g fill="rgba(255,255,255,.35)" stroke="#2a2d3a" stroke-width="3.5"><circle cx="44" cy="60" r="13"/><circle cx="76" cy="60" r="13"/></g><path d="M57 59 Q60 55 63 59" stroke="#2a2d3a" stroke-width="3.5" fill="none"/>';
-    if (c.acc === "crown") a = '<path d="M36 24 L42 0 L51 15 L60 -4 L69 15 L78 0 L84 24 Z" fill="#ffc23d" stroke="#c98a00" stroke-width="2.5" stroke-linejoin="round"/><circle cx="60" cy="16" r="3.5" fill="#ff5a4f"/>';
-    if (c.acc === "scarf") a = '<rect x="20" y="92" width="80" height="12" rx="6" fill="#ff5a4f"/><path d="M70 100 L76 126 L88 122 L80 100 Z" fill="#e8443a"/>';
-    return '<svg class="ghost ' + (cls || "") + '" viewBox="0 -10 120 150" aria-hidden="true">' +
-      '<path d="M20 72 Q20 14 60 14 Q100 14 100 72 L100 126 Q93 116 86 126 Q78 136 70 126 Q60 116 50 126 Q42 136 34 126 Q27 116 20 126 Z" fill="' + c.body + '" stroke="rgba(0,0,0,.22)" stroke-width="2"/>' +
-      '<circle cx="34" cy="80" r="6" fill="#ff8fa8" opacity=".45"/><circle cx="86" cy="80" r="6" fill="#ff8fa8" opacity=".45"/>' +
-      '<g class="eyes"><ellipse cx="44" cy="60" rx="6.5" ry="8.5" fill="#1a1c2b"/><ellipse cx="76" cy="60" rx="6.5" ry="8.5" fill="#1a1c2b"/>' +
-      '<circle cx="46" cy="57" r="2.3" fill="#fff"/><circle cx="78" cy="57" r="2.3" fill="#fff"/></g>' +
-      '<ellipse cx="60" cy="88" rx="7" ry="9" fill="#1a1c2b"/>' + a + '</svg>';
+
+  var ICON_NEXT = '<svg viewBox="0 0 24 24"><path d="M5 12h14 M13.5 6.5L19 12l-5.5 5.5"/></svg>';
+  var ICON_AGAIN = '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.6-5.9 M4 4.5v4.6h4.6"/></svg>';
+  function candleSVG(lit) {
+    return '<svg class="candle' + (lit ? " lit" : "") + '" viewBox="0 0 20 46" aria-hidden="true">' +
+      '<ellipse class="halo" cx="10" cy="10" rx="9" ry="10" fill="rgba(201,164,106,.18)"/>' +
+      '<path class="flame" d="M10 2 C13 7 14 10 12.6 13 C11.8 14.6 8.2 14.6 7.4 13 C6 10 7 7 10 2 Z" fill="#e9c98f"/>' +
+      '<path class="flame" d="M10 7 C11.3 9.5 11.6 11 11 12.4 C10.6 13.2 9.4 13.2 9 12.4 C8.4 11 8.7 9.5 10 7 Z" fill="#fff4dc"/>' +
+      '<path d="M10 13.5 V17" stroke="#2a2622" stroke-width="1.2"/>' +
+      '<path d="M5 17 H15 V44 H5 Z" fill="#cfc8b4"/><path d="M5 17 H15 V20 C13.5 20 13.5 24 12.5 24 C11.5 24 11.6 19.5 10 19.5 C8.6 19.5 8.6 22 7.4 22 C6.2 22 6.4 19 5 19 Z" fill="#e6e0cc"/>' +
+      '<path d="M12 17 H15 V44 H12 Z" fill="#000" opacity=".22"/></svg>';
   }
 
-  /* ---------- Zvuk, hlas, displej ---------- */
-  var ctx = null, master = null, soundOn = true, voiceOn = true, lock = null, unlocked = false, silentEl = null, csVoice = null, utt = null;
+  /* ---------- Zvuk ---------- */
+  var ctx = null, master = null, verb = null, soundOn = true, voiceOn = true, lock = null, unlocked = false, silentEl = null, csVoice = null, utt = null, noiseBuf = null;
   function audio() {
     try {
       if (!ctx) {
         ctx = new (window.AudioContext || window.webkitAudioContext)();
-        /* společný výstup s kompresorem: víc zvuků naráz se nepřebudí do chrčení */
-        master = ctx.createDynamicsCompressor(); master.threshold.value = -10; master.ratio.value = 6;
+        master = ctx.createDynamicsCompressor(); master.threshold.value = -14; master.ratio.value = 5;
         master.connect(ctx.destination);
+        /* dozvuk: uměle vyrobená odezva, aby zvuky zněly jako v mlze mezi stromy */
+        verb = ctx.createConvolver();
+        var len = ctx.sampleRate * 3.2, ir = ctx.createBuffer(2, len, ctx.sampleRate);
+        for (var ch = 0; ch < 2; ch++) { var d = ir.getChannelData(ch); for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+        verb.buffer = ir; var vg = ctx.createGain(); vg.gain.value = 0.55; verb.connect(vg); vg.connect(master);
+        noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+        var nd = noiseBuf.getChannelData(0); for (var k = 0; k < nd.length; k++) nd[k] = Math.random() * 2 - 1;
       }
-      /* iOS po zamčení displeje přepne kontext na "interrupted", jiné prohlížeče na "suspended" */
       if (ctx.state !== "running") ctx.resume().catch(function () {});
     } catch (e) { ctx = null; }
     return ctx;
   }
-  function out() { return master || ctx.destination; }
-  /* Krátké ticho ve WAV: přehrané přes <audio> přepne iPhone do režimu přehrávání, takže zvuk hraje i s vypínačem ticha */
+  /* pošle zvuk na výstup: wet = kolik jde do dozvuku (0 až 1) */
+  function route(node, wet) {
+    var dry = ctx.createGain(), w = ctx.createGain();
+    dry.gain.value = 1 - wet * 0.6; w.gain.value = wet;
+    node.connect(dry); dry.connect(master); node.connect(w); w.connect(verb);
+  }
   function silentWav() {
     var n = 4000, b = new Uint8Array(44 + n), v = new DataView(b.buffer), w = function (o, t) { for (var i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); };
     w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
@@ -386,13 +318,11 @@
     var str = ""; for (var j = 0; j < b.length; j++) str += String.fromCharCode(b[j]);
     return "data:audio/wav;base64," + btoa(str);
   }
-  /* Volá se při každém ťuknutí: odemkne zvuk i hlas (prohlížeče to dovolí jen během dotyku) */
+  /* Při každém ťuknutí odemkne zvuk i hlas (prohlížeče to dovolí jen během dotyku). Tiché <audio> přepne iPhone do přehrávání i s vypínačem ticha. */
   function unlock() {
     var c = audio();
     try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
-    if (c) {
-      try { var buf = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination); src.start(0); } catch (e) {}
-    }
+    if (c) { try { var buf = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination); src.start(0); } catch (e) {} }
     try {
       if (!silentEl) { silentEl = new Audio(silentWav()); silentEl.loop = true; silentEl.setAttribute("playsinline", ""); silentEl.volume = 0.01; }
       if (silentEl.paused) { var pr = silentEl.play(); if (pr && pr.catch) pr.catch(function () {}); }
@@ -403,8 +333,88 @@
     }
   }
   ["pointerdown", "touchend", "click", "keydown"].forEach(function (ev) { document.addEventListener(ev, unlock, true); });
-  /* Nejlepší český hlas, který telefon má: prémiové a vylepšené hlasy (iPhone), Google a neurální hlasy (Android, Chrome, Edge).
-     Robotické hlasy Eloquence z iPhonu (Eddy, Flo, Babička…) jdou až na konec. */
+
+  /* Zvon: neharmonické alikvoty jako u skutečného zvonu, dlouhý dozvuk */
+  function bell(f, vol, dur) {
+    if (!soundOn || !audio()) return;
+    var n = ctx.currentTime, g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, n + dur);
+    route(g, 0.8);
+    [[1, 1], [2, .45], [2.76, .35], [4.07, .18], [5.4, .1]].forEach(function (p) {
+      var o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = f * p[0]; og.gain.value = p[1];
+      o.connect(og); og.connect(g); o.start(n); o.stop(n + dur + 0.05);
+    });
+  }
+  /* Šepot: šum přes úzké filtry, které se pomalu posouvají */
+  function whisper(vol, dur) {
+    if (!soundOn || !audio()) return;
+    var n = ctx.currentTime, src = ctx.createBufferSource(), g = ctx.createGain();
+    src.buffer = noiseBuf; src.loop = true;
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + dur * 0.35); g.gain.exponentialRampToValueAtTime(0.0001, n + dur);
+    [[1700, 3200], [800, 1300]].forEach(function (fr) {
+      var b = ctx.createBiquadFilter(); b.type = "bandpass"; b.Q.value = 4;
+      b.frequency.setValueAtTime(fr[0], n); b.frequency.linearRampToValueAtTime(fr[1], n + dur * 0.6); b.frequency.linearRampToValueAtTime(fr[0], n + dur);
+      src.connect(b); b.connect(g);
+    });
+    route(g, 0.7); src.start(n); src.stop(n + dur + 0.1);
+  }
+  /* Tlukot srdce: dvojitý tlumený úder, čím blíž, tím rychlejší */
+  function thump(vol) {
+    if (!soundOn || !audio()) return;
+    [0, 0.2].forEach(function (t, k) {
+      var n = ctx.currentTime + t, o = ctx.createOscillator(), g = ctx.createGain(), v = vol * (k ? 0.65 : 1);
+      o.frequency.setValueAtTime(95, n); o.frequency.exponentialRampToValueAtTime(42, n + 0.14);
+      g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(v, n + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, n + 0.22);
+      o.connect(g); route(g, 0.15); o.start(n); o.stop(n + 0.25);
+    });
+  }
+  /* Duch: táhlé houkání s chvěním, vzdálené = víc dozvuku */
+  function hoo(f, vol, wet) {
+    if (!soundOn || !audio()) return;
+    var n = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain(), lp = ctx.createBiquadFilter();
+    o.type = "triangle"; lp.type = "lowpass"; lp.frequency.value = 1400;
+    lfo.frequency.value = 5; lg.gain.value = f * 0.025; lfo.connect(lg); lg.connect(o.frequency);
+    o.frequency.setValueAtTime(f * 0.92, n); o.frequency.linearRampToValueAtTime(f * 1.12, n + 0.9); o.frequency.exponentialRampToValueAtTime(f * 0.78, n + 2.2);
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.6); g.gain.setValueAtTime(vol, n + 1.2); g.gain.exponentialRampToValueAtTime(0.0001, n + 2.3);
+    o.connect(lp); lp.connect(g); route(g, wet == null ? 0.6 : wet);
+    o.start(n); lfo.start(n); o.stop(n + 2.4); lfo.stop(n + 2.4);
+  }
+  /* Zombie: nízké chrčení přes filtr */
+  function groan(f, vol, wet) {
+    if (!soundOn || !audio()) return;
+    var n = ctx.currentTime, o = ctx.createOscillator(), o2 = ctx.createOscillator(), flt = ctx.createBiquadFilter(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+    o.type = "sawtooth"; o2.type = "square"; flt.type = "lowpass"; flt.Q.value = 7;
+    lfo.frequency.value = 8; lg.gain.value = f * 0.1; lfo.connect(lg); lg.connect(o.frequency); lg.connect(o2.frequency);
+    o.frequency.setValueAtTime(f, n); o.frequency.linearRampToValueAtTime(f * 1.12, n + 0.6); o.frequency.exponentialRampToValueAtTime(f * 0.72, n + 1.8);
+    o2.frequency.setValueAtTime(f * 1.01, n); o2.frequency.exponentialRampToValueAtTime(f * 0.73, n + 1.8);
+    flt.frequency.setValueAtTime(260, n); flt.frequency.linearRampToValueAtTime(760, n + 0.55); flt.frequency.exponentialRampToValueAtTime(200, n + 1.8);
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.3); g.gain.setValueAtTime(vol, n + 1.1); g.gain.exponentialRampToValueAtTime(0.0001, n + 1.9);
+    o.connect(flt); o2.connect(flt); flt.connect(g); route(g, wet == null ? 0.5 : wet);
+    [o, o2, lfo].forEach(function (x) { x.start(n); x.stop(n + 1.95); });
+  }
+  /* Podkres: vítr (hnědý šum) a nízký rozladěný bzukot. Hraje jen během hledání. */
+  var amb = null;
+  function ambience(on) {
+    if (on && soundOn && !amb && audio()) {
+      var n = ctx.currentTime, out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, n); out.gain.exponentialRampToValueAtTime(1, n + 4); out.connect(master);
+      var len = ctx.sampleRate * 4, bb = ctx.createBuffer(1, len, ctx.sampleRate), d = bb.getChannelData(0), last = 0;
+      for (var i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+      var wind = ctx.createBufferSource(); wind.buffer = bb; wind.loop = true;
+      var lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 500; lp.Q.value = 2;
+      var lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 0.07; lg.gain.value = 320; lfo.connect(lg); lg.connect(lp.frequency);
+      var wg = ctx.createGain(); wg.gain.value = 0.11; wind.connect(lp); lp.connect(wg); wg.connect(out);
+      var drones = [55, 55.6, 82.6].map(function (f, k) { var o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = f; g.gain.value = k === 2 ? 0.012 : 0.022; o.connect(g); g.connect(out); return o; });
+      wind.start(n); lfo.start(n); drones.forEach(function (o) { o.start(n); });
+      amb = { out: out, nodes: [wind, lfo].concat(drones) };
+    } else if (!on && amb && ctx) {
+      var a = amb, t = ctx.currentTime; amb = null;
+      a.out.gain.cancelScheduledValues(t); a.out.gain.setValueAtTime(Math.max(a.out.gain.value, 0.0001), t); a.out.gain.exponentialRampToValueAtTime(0.0001, t + 2);
+      a.nodes.forEach(function (x) { try { x.stop(t + 2.1); } catch (e) {} });
+    }
+  }
+
+  /* ---------- Hlas ---------- */
   var VOICE_KEY = "lovci-duchu-hlas", csVoices = [];
   function voiceScore(v) {
     var n = v.name + " " + (v.voiceURI || ""), sc = 0;
@@ -432,26 +442,17 @@
     row.hidden = csVoices.length < 2;
     sel.innerHTML = "";
     csVoices.forEach(function (v) {
-      var o = document.createElement("option");
-      o.value = v.voiceURI; var n = v.name + " " + (v.voiceURI || "");
+      var o = document.createElement("option"), n = v.name + " " + (v.voiceURI || "");
+      o.value = v.voiceURI;
       o.textContent = v.name.split(" (")[0].trim() + (/premium|prémiov/i.test(n) ? " – prémiový" : /enhanced|vylepšen/i.test(n) ? " – vylepšený" : /neural|natural|online/i.test(n) ? " – přirozený" : "") + (voiceScore(v) >= 4 ? " ★" : "");
       if (csVoice && v.voiceURI === csVoice.voiceURI) o.selected = true;
       sel.appendChild(o);
     });
   }
   if ("speechSynthesis" in window) { pickVoice(); try { speechSynthesis.addEventListener("voiceschanged", pickVoice); } catch (e) { speechSynthesis.onvoiceschanged = pickVoice; } }
-  function tone(f, d, type, v, f2) {
-    if (!soundOn) return;
-    var c = audio(); if (!c) return;
-    var o = c.createOscillator(), g = c.createGain(), n = c.currentTime;
-    o.type = type || "sine"; o.frequency.setValueAtTime(f, n);
-    if (f2) o.frequency.exponentialRampToValueAtTime(f2, n + d);
-    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(v || 0.1, n + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, n + d);
-    o.connect(g); g.connect(out()); o.start(n); o.stop(n + d + 0.02);
-  }
   var lastSpeak = 0;
-  /* opts.pitch / opts.rate: duchové mluví výš, zombie hlouběji; vypravěč přirozeně */
-  function speak(text, force, opts) {
+  /* Vypravěč mluví klidně a pomaleji, ne jako moderátor */
+  function speak(text, force) {
     if (!voiceOn) return;
     var now = performance.now();
     if (!force && now - lastSpeak < 4000) return;
@@ -459,11 +460,10 @@
     try {
       if (!("speechSynthesis" in window)) return;
       var u = new SpeechSynthesisUtterance(text.toLowerCase());
-      u.lang = "cs-CZ"; u.pitch = opts && opts.pitch || 1; u.rate = opts && opts.rate || 1; if (csVoice) u.voice = csVoice;
-      utt = u; /* držet odkaz, jinak ho Chrome uklidí a hlas utichne */
+      u.lang = "cs-CZ"; u.pitch = 0.95; u.rate = 0.88; if (csVoice) u.voice = csVoice;
+      utt = u;
       var ss = speechSynthesis;
       if (ss.paused) ss.resume();
-      /* cancel() těsně před speak() Chrome i Safari občas spolknou, proto chvilka odstup */
       if (ss.speaking || ss.pending) { ss.cancel(); setTimeout(function () { ss.speak(u); }, 120); }
       else ss.speak(u);
     } catch (e) {}
@@ -509,16 +509,16 @@
   }
 
   /* ---------- Stav ---------- */
-  var state = "intro"; /* intro | locating | play | done */
+  var state = "intro"; /* intro | locating | pick | play | reveal | done */
   var test = false, testHeading = 0, watchId = null, pos = null, acc = 99, t0Loc = 0, resumeData = null;
   var origin = null, ghosts = [], startedAt = 0, finishedAt = 0, target = null;
-  var revealEl = $("#reveal"), stageEl = $("#stage"), titleEl = $("#title"), rnext = $("#rnext");
   var heading = null, headingAt = 0, absSeen = false, listening = false, gpsHeading = null, gpsHeadAt = 0;
 
   var intro = $("#intro"), msg = $("#msg"), beginBtn = $("#begin"), resumeBtn = $("#resume"), testBtn = $("#testbtn");
+  var revealEl = $("#reveal"), stageEl = $("#stage"), scoreEl = $("#score"), rnext = $("#rnext"), candlesEl = $("#candles");
   var radar = $("#radar"), northEl = $("#north"), sayEl = $("#say"), hintEl = $("#dirhint");
-  var valueEl = $("#value"), stateEl = $("#state"), counterEl = $("#counter"), timeEl = $("#time"), catchBtn = $("#catch");
-  var leds = Array.prototype.slice.call(document.querySelectorAll(".led"));
+  var valueEl = $("#value"), stateEl = $("#state"), timeEl = $("#time"), catchBtn = $("#catch");
+  var bars = Array.prototype.slice.call(document.querySelectorAll("#meter i"));
   var dots = [];
 
   function save() {
@@ -534,6 +534,18 @@
   }
   var saved = loadSave();
   if (saved) resumeBtn.hidden = false;
+
+  var shownCandles = "";
+  function drawCandles() {
+    var key = ghosts.map(function (g) { return g.caught ? 1 : 0; }).join("") || "000";
+    if (key === shownCandles) return;
+    shownCandles = key;
+    var list = ghosts.length ? ghosts : [{}, {}, {}];
+    candlesEl.innerHTML = list.map(function (g) { return candleSVG(g.caught); }).join("");
+    var n = list.filter(function (g) { return g.caught; }).length;
+    candlesEl.setAttribute("aria-label", "Nalezeno " + n + " ze " + N);
+  }
+  drawCandles();
 
   /* ---------- Kompas ---------- */
   function onOri(e) {
@@ -574,7 +586,7 @@
     acc = p.coords.accuracy || 99;
     if (typeof p.coords.heading === "number" && !isNaN(p.coords.heading) && (p.coords.speed || 0) > 0.8) { gpsHeading = p.coords.heading; gpsHeadAt = performance.now(); }
     if (state === "locating") {
-      msg.textContent = "Hledám GPS… přesnost " + Math.round(acc) + " m. Počkej pár vteřin.";
+      msg.textContent = "Hledám tě… přesnost " + Math.round(acc) + " m. Chvilku počkej.";
       if (acc <= 25 || performance.now() - t0Loc > 12000) startGame(pos);
     }
   }
@@ -582,10 +594,10 @@
     if (state === "locating") {
       state = "intro"; beginBtn.disabled = false; resumeBtn.disabled = false; stopWatch();
       msg.textContent = e && e.code === 1
-        ? "Poloha je zakázaná. Povol ji v nastavení prohlížeče pro tuhle stránku. V náhledu uvnitř Claude poloha nefunguje, otevři stránku jako samostatný web."
-        : "GPS se nepodařilo zjistit. Vyjdi ven pod širé nebe a zkus to znovu.";
-    } else if (state === "play") {
-      hintEl.textContent = "GPS signál se ztratil. Chvíli stůj na místě.";
+        ? "Poloha je zakázaná. Povol ji v nastavení prohlížeče pro tuhle stránku."
+        : "Polohu se nepodařilo zjistit. Vyjdi ven pod širé nebe a zkus to znovu.";
+    } else if (state === "play" || state === "pick") {
+      hintEl.textContent = "Signál se ztratil. Chvíli stůj na místě.";
     }
   }
 
@@ -594,7 +606,7 @@
     dots.forEach(function (d) { if (d.parentNode) d.parentNode.removeChild(d); });
     dots = ghosts.map(function (g, i) {
       var d = document.createElement("button");
-      d.type = "button"; d.className = "dot"; d.dataset.cls = ""; d.setAttribute("aria-label", "Tečka " + (i + 1));
+      d.type = "button"; d.className = "dot"; d.dataset.cls = ""; d.setAttribute("aria-label", "Světýlko " + (i + 1));
       d.addEventListener("click", function () { if (state === "pick" && !ghosts[i].caught) chooseTarget(i, ""); });
       radar.appendChild(d); return d;
     });
@@ -606,65 +618,62 @@
     startedAt = savedGame ? savedGame.startedAt : Date.now();
     target = savedGame && typeof savedGame.target === "number" && ghosts[savedGame.target] && !ghosts[savedGame.target].caught ? savedGame.target : null;
     finishedAt = 0; intro.hidden = true; radar.classList.remove("off");
-    lastBand = ""; buildDots(); save(); wake(true);
+    lastBand = ""; buildDots(); drawCandles(); save(); wake(true); ambience(true);
     if (target !== null) { chooseTarget(target, "Pokračujeme. "); return; }
-    showPick(savedGame ? "Pokračujeme. " : "Tři strašidla se schovala do padesáti metrů kolem tebe. ");
+    showPick(savedGame ? "Pokračujeme. " : "Tři strašidla se ukryla kolem tebe. ");
   }
-  /* Výběr: dítě ťukne na tečku na radaru. Kdo v ní je, se ukáže až po chycení. */
+  /* Výběr: dítě ťukne na světýlko na radaru. Pak se zamkne. */
   function showPick(prefix) {
-    state = "pick"; target = null; revealEl.hidden = true; save();
-    titleEl.textContent = "Vyber tečku";
+    cancelLater(); state = "pick"; target = null; revealEl.hidden = true; save(); ambience(true);
     var left = ghosts.filter(function (g) { return !g.caught; }).length;
-    var t = (prefix || "") + (left === 1 ? "Zbývá poslední tečka. Ťukni na ni." : "Ťukni na jednu tečku na radaru. Tu půjdeš hledat.");
+    var t = (prefix || "") + (left === 1 ? "Zbývá poslední světýlko. Ťukni na něj." : "Ťukni na jedno světýlko na radaru.");
     sayEl.textContent = t; speak(t, true);
   }
   function chooseTarget(i, prefix) {
     target = i; state = "play"; save();
     var b0 = nearest(); lastBand = b0 ? bandOf(b0.d) : "";
-    titleEl.innerHTML = '<span class="q">?</span><span>Kdo to je?</span>';
-    lastDir = ""; nextHoo = performance.now() + 2500;
-    tone(300, 0.12, "square", 0.08, 600); setTimeout(function () { tone(600, 0.15, "square", 0.08); }, 120);
-    var t = prefix + "Tečka je zamčená. Jdi k ní a poslouchej. Kdo se v ní schovává?";
+    lastDir = ""; nextCall = performance.now() + 3000;
+    bell(98, 0.12, 4);
+    var t = prefix + "Jdi tiše za světýlkem. A poslouchej.";
     sayEl.textContent = t; speak(t, true);
   }
-  function jingle() {
-    [523, 659, 784, 1047].forEach(function (f, k) { setTimeout(function () { tone(f, 0.18, "triangle", 0.12); }, k * 110); });
-    setTimeout(function () { tone(420, 0.6, "sine", 0.1, 180); }, 520);
+  /* Strašidlo se neukazuje. Jen oči ve tmě a zpráva, že je někde tady. */
+  function eyesSVG(zom) {
+    var iris = zom ? "#c8c27a" : "#cfe6dc", glow = zom ? "rgba(200,194,122,.55)" : "rgba(185,214,200,.55)";
+    var eye = function (x) {
+      return '<g class="lid"><path d="M' + (x - 26) + ' 50 Q' + x + ' 30 ' + (x + 26) + ' 50 Q' + x + ' 62 ' + (x - 26) + ' 50 Z" fill="' + iris + '" opacity=".9"/>' +
+        '<ellipse cx="' + x + '" cy="48.5" rx="' + (zom ? 3.2 : 2.2) + '" ry="9" fill="#020303"/></g>';
+    };
+    return '<svg class="eyes" viewBox="0 0 200 100" aria-hidden="true"><defs><filter id="eg" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>' +
+      '<g filter="url(#eg)" style="filter:drop-shadow(0 0 14px ' + glow + ')">' + eye(62) + eye(138) + '</g></svg>';
   }
-  function sparks() { sparksIn(stageEl); }
-  function sparksIn(host) {
-    for (var k = 0; k < 12; k++) {
-      var s = document.createElement("span"), a = k / 12 * Math.PI * 2, r = 90 + Math.random() * 60;
-      s.className = "spark"; s.textContent = k % 2 ? "✦" : "★";
-      s.style.setProperty("--x", Math.cos(a) * r + "px"); s.style.setProperty("--y", Math.sin(a) * r + "px");
-      s.style.animationDelay = (0.25 + Math.random() * 0.2) + "s";
-      host.appendChild(s);
-    }
-  }
-  /* Strašidlo se neukazuje. Hra jen oznámí, že je nalezené a schovává se někde tady v okolí. */
-  function scoreHTML() {
-    return '<div class="score">' + ghosts.map(function (g) { return '<i class="' + (g.caught ? "on" : "") + '">' + (g.caught ? "✓" : "") + "</i>"; }).join("") + "</div>";
-  }
+  function drawScore() { scoreEl.innerHTML = ghosts.map(function (g) { return candleSVG(g.caught); }).join(""); }
   function showReveal(i) {
-    rnext.innerHTML = "▶️"; rnext.setAttribute("aria-label", "Dál"); rnext.title = "Dál";
-    state = "reveal"; var c = CHARS[ghosts[i].c], zom = c.type === "zombie";
-    revealEl.style.setProperty("--glow", c.glow); revealEl.classList.toggle("zom", zom); revealEl.hidden = false;
-    $("#boo").textContent = zom ? "Grrr!" : "Bú!";
-    stageEl.className = "";
-    stageEl.innerHTML = '<div class="found-ico">👀</div>' + scoreHTML();
-    $("#rname").textContent = "Nalezeno!";
-    $("#rquote").textContent = "Strašidlo je někde tady v okolí. Rozhlédni se!";
+    cancelLater(); state = "reveal"; var c = CHARS[ghosts[i].c], zom = c.type === "zombie";
+    revealEl.hidden = false; restartAnims(revealEl);
+    stageEl.innerHTML = eyesSVG(zom);
+    $("#rname").textContent = "Nalezeno.";
+    $("#rquote").textContent = "Je někde tady. Rozhlédni se.";
+    drawScore(); drawCandles();
     var left = ghosts.filter(function (g) { return !g.caught; }).length;
+    rnext.innerHTML = ICON_NEXT; rnext.setAttribute("aria-label", "Dál"); rnext.title = "Dál";
     rnext.onclick = left ? function () { showPick(""); } : finish;
-    if (zom) groan(c.hoo, 0.35); else jingle();
-    setTimeout(function () { speak("Nalezeno! Strašidlo je někde tady v okolí. Rozhlédni se!", true); }, zom ? 1000 : 600);
-    try { navigator.vibrate && navigator.vibrate(zom ? [300, 80, 300] : [80, 60, 80, 60, 200]); } catch (e) {}
+    if (zom) groan(c.hoo, 0.32, 0.35); else hoo(c.hoo, 0.22, 0.4);
+    after(900, function () { whisper(0.16, 2.2); });
+    after(1500, function () { bell(147, 0.14, 5); });
+    after(2300, function () { speak("Nalezeno. Je někde tady. Rozhlédni se.", true); });
+    try { navigator.vibrate && navigator.vibrate(zom ? [400, 120, 400] : [120, 90, 120]); } catch (e) {}
   }
+  /* odložené zvuky a hlášky jedné obrazovky; při odchodu z ní se zruší */
+  var later = [];
+  function after(ms, fn) { later.push(setTimeout(fn, ms)); }
+  function cancelLater() { later.forEach(clearTimeout); later = []; }
+  function restartAnims(el) { Array.prototype.forEach.call(el.querySelectorAll("h2, .quote, .btn"), function (x) { x.style.animation = "none"; void x.offsetWidth; x.style.animation = ""; }); }
   function begin(resume) {
     audio(); test = false;
     if (!navigator.geolocation) { msg.textContent = "Tenhle prohlížeč neumí zjistit polohu."; return; }
     beginBtn.disabled = true; resumeBtn.disabled = true;
-    msg.textContent = "Zapínám kompas a GPS. Povol obojí, až se telefon zeptá.";
+    msg.textContent = "Povol polohu a kompas, až se telefon zeptá.";
     var cp = compassPermission(); /* musí se zavolat hned v gestu uživatele */
     resumeData = resume ? loadSave() : null;
     state = "locating"; t0Loc = performance.now(); pos = null;
@@ -678,26 +687,25 @@
     $("#testbar").hidden = false; resumeData = null; startGame(pos, null);
   }
   function toIntro() {
-    stopWatch(); hush(); wake(false); state = "intro"; test = false; $("#testbar").hidden = true;
-    revealEl.hidden = true; target = null; titleEl.textContent = "Detektor duchů";
+    cancelLater(); stopWatch(); hush(); wake(false); ambience(false); state = "intro"; test = false; $("#testbar").hidden = true;
+    revealEl.hidden = true; target = null;
     intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; radar.classList.add("off");
     saved = loadSave(); resumeBtn.hidden = !saved; msg.textContent = "";
-    ghosts = []; buildDots(); counterEl.textContent = "0/" + N; timeEl.textContent = "0:00"; catchBtn.disabled = true;
+    ghosts = []; buildDots(); drawCandles(); timeEl.textContent = "0:00"; catchBtn.disabled = true; sayEl.textContent = "";
   }
   function finish() {
-    state = "done"; finishedAt = Date.now(); clearSave(); stopWatch(); wake(false); radar.classList.add("off");
-    var t = "Hurá! Všechna strašidla jsou nalezená! Tvůj čas je " + mmss((finishedAt - startedAt) / 1000) + ".";
-    sayEl.textContent = t; speak(t, true);
-    tone(660, 0.2, "triangle", 0.12); setTimeout(function () { tone(880, 0.3, "triangle", 0.12); }, 220);
-    catchBtn.disabled = true; titleEl.textContent = "Detektor duchů";
-    /* závěr: pohár a tři odškrtnutá kolečka, bez obrázků strašidel */
-    revealEl.style.setProperty("--glow", "#5fe3cf"); revealEl.classList.remove("zom"); revealEl.hidden = false;
-    $("#boo").textContent = "Hurá!";
-    stageEl.className = "";
-    stageEl.innerHTML = '<div class="found-ico">🏆</div>' + scoreHTML(); sparksIn(stageEl);
-    $("#rname").textContent = "Všechna tři strašidla jsou nalezená!";
-    $("#rquote").textContent = "Tvůj čas: " + mmss((finishedAt - startedAt) / 1000) + ".";
-    rnext.innerHTML = "🔄"; rnext.setAttribute("aria-label", "Nová hra"); rnext.title = "Nová hra"; rnext.onclick = toIntro;
+    cancelLater(); state = "done"; finishedAt = Date.now(); clearSave(); stopWatch(); wake(false); ambience(false); radar.classList.add("off");
+    catchBtn.disabled = true;
+    var time = mmss((finishedAt - startedAt) / 1000);
+    revealEl.hidden = false; restartAnims(revealEl);
+    stageEl.innerHTML = '<div class="time">' + time + "</div>";
+    $("#rname").textContent = "Ticho.";
+    $("#rquote").textContent = "Všechna tři strašidla jsou nalezená. Svíčky hoří.";
+    drawScore();
+    rnext.innerHTML = ICON_AGAIN; rnext.setAttribute("aria-label", "Nová hra"); rnext.title = "Nová hra"; rnext.onclick = toIntro;
+    [0, 1, 2].forEach(function (k) { after(k * 1300, function () { bell([196, 165, 131][k], 0.13, 6); }); });
+    after(900, function () { speak("Ticho. Všechna tři strašidla jsou nalezená. Tvůj čas je " + time + ".", true); });
+    sayEl.textContent = "";
   }
   catchBtn.addEventListener("click", function () {
     if (state !== "play") return;
@@ -709,13 +717,12 @@
   function mmss(s) { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
   function catchR() { return clamp(acc, 6, 12); }
   function nearest() {
-    /* vybraný duch, kterého dítě právě hledá */
     if (!pos || target === null || !ghosts[target] || ghosts[target].caught) return null;
     return { g: ghosts[target], i: target, d: dist(pos, ghosts[target]) };
   }
 
   /* ---------- Smyčka ---------- */
-  var level = 0, shownAng = 0, lastBand = "";
+  var level = 0, lastBand = "";
   function bandOf(d) {
     var r = catchR();
     if (d <= r) return "here";
@@ -725,11 +732,11 @@
     return "cold";
   }
   var bandText = {
-    here: ["Je přímo tady!", "Je přímo tady! Ťukni na ruku a chyť ho."],
-    close: ["Skoro tam", "Skoro tam! Hledej kolem sebe."],
-    strong: ["Silný signál", "Silný signál! Jsi blízko."],
-    weak: ["Slabý signál", "Slabý signál. Jdi k tečce na radaru."],
-    cold: ["Studený signál", "Studený signál. Jdi k tečce na radaru."]
+    here: ["Je tady.", "Je tady. Ťukni na ruku."],
+    close: ["Velmi blízko.", "Velmi blízko. Zpomal a rozhlížej se."],
+    strong: ["Blízko.", "Je blízko. Slyšíš ho?"],
+    weak: ["Něco cítím.", "Něco cítím. Jdi za světýlkem."],
+    cold: ["Ticho.", "Zatím ticho. Jdi za světýlkem."]
   };
 
   function frame() {
@@ -737,112 +744,82 @@
     var best = state === "play" ? nearest() : null;
     var hd = curHeading(), tgt = 0;
     if (best) {
-      var d = best.d, br = bearing(pos, best.g);
-      var ang = br - (hd.h === null ? 0 : hd.h);
+      var d = best.d, ang = bearing(pos, best.g) - (hd.h === null ? 0 : hd.h);
       sayDirection(hd.h === null ? null : ang, d);
       northEl.style.opacity = hd.h === null ? "1" : "0.4";
-      tgt = clamp(5 * (1 - (d - 4) / 46), 0, 5);
+      tgt = clamp(10 * (1 - (d - 4) / 46), 0, 10);
       valueEl.innerHTML = Math.round(d) + "<small>m</small>";
-      var band = bandOf(d);
-      var bt = bandText[band];
+      var band = bandOf(d), bt = bandText[band];
       stateEl.textContent = bt[0]; stateEl.className = "state" + (band === "here" || band === "close" ? " alert" : band === "strong" ? " warn" : "");
       if (band !== lastBand) { lastBand = band; sayEl.textContent = bt[1]; speak(bt[1]); }
       catchBtn.disabled = band !== "here";
       var far = origin ? dist(pos, origin) : 0;
-      hintEl.textContent = "GPS ±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " (nahoře je sever)" : "") + (far > 120 ? " · Jsi daleko od startu, vrať se." : "");
-    } else if (state === "done") {
-      valueEl.innerHTML = "0<small>m</small>"; stateEl.textContent = "Hotovo"; stateEl.className = "state";
-      hintEl.textContent = "";
+      hintEl.textContent = "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") + (far > 120 ? " · jsi daleko od startu, vrať se" : "");
     } else if (state === "pick") {
-      valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Vyber tečku"; stateEl.className = "state warn"; catchBtn.disabled = true;
-      hintEl.textContent = pos ? "GPS ±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " (nahoře je sever)" : "") : "";
-    } else {
-      if (state === "intro") { valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Čeká na start"; stateEl.className = "state"; }
+      valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Vyber světýlko."; stateEl.className = "state"; catchBtn.disabled = true;
+      hintEl.textContent = pos ? "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") : "";
+    } else if (state === "intro") {
+      valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = ""; stateEl.className = "state"; hintEl.textContent = "";
     }
-    /* radar: ve středu jsi ty, měřítko 60 m. Výběr: všechny tečky. Hra: jen zamčená. Chycení: jejich obrázek. */
+    /* radar: ve středu jsi ty, měřítko 60 m */
     if (pos && (state === "pick" || state === "play")) {
       var hh = hd.h === null ? 0 : hd.h;
       ghosts.forEach(function (g, i) {
         var el = dots[i]; if (!el) return;
         var gd = dist(pos, g), rel = bearing(pos, g) - hh, r = Math.min(gd, 60) / 60 * 40;
         el.style.left = (50 + r * Math.sin(rad(rel))) + "%"; el.style.top = (50 - r * Math.cos(rad(rel))) + "%";
-        var cls = g.caught ? "found" : state === "pick" ? "pick" : i === target ? "tgt" + (gd <= catchR() ? " here" : "") : "";
+        var cls = g.caught ? "found" : state === "pick" ? "pick" : i === target ? "tgt" + (gd <= 12 ? " near" : "") : "";
         if (el.dataset.cls !== cls) {
           el.dataset.cls = cls; el.className = "dot " + cls;
-          el.innerHTML = g.caught ? "✓" : cls ? "?" : "";
           el.disabled = state !== "pick" || g.caught; el.tabIndex = el.disabled ? -1 : 0;
         }
       });
     }
-    level += (tgt - level) * 0.1;
-    for (var i = 0; i < leds.length; i++) leds[i].classList.toggle("on", state === "play" && level >= i + 0.5);
-    if (state === "play" || state === "pick" || state === "done") {
-      var left = ghosts.filter(function (g) { return !g.caught; }).length;
-      counterEl.textContent = (N - left) + "/" + N;
-      timeEl.textContent = mmss(((state === "done" ? finishedAt : Date.now()) - startedAt) / 1000);
-    }
+    level += (tgt - level) * 0.08;
+    for (var i = 0; i < bars.length; i++) bars[i].classList.toggle("on", state === "play" && level >= i + 0.5);
+    if (state === "play" || state === "pick") timeEl.textContent = mmss((Date.now() - startedAt) / 1000);
+    drawCandles();
   }
   /* Hlasové pokyny ke směru (jen s kompasem) */
   var lastDir = "", lastDirAt = 0;
   function sayDirection(ang, d) {
     if (ang === null || d <= catchR()) return;
-    var a = ((ang % 360) + 360) % 360, dir = a < 35 || a > 325 ? "rovně před tebou" : a <= 145 ? "vpravo" : a < 215 ? "za tebou" : "vlevo";
+    var a = ((ang % 360) + 360) % 360, dir = a < 35 || a > 325 ? "před tebou" : a <= 145 ? "vpravo" : a < 215 ? "za tebou" : "vlevo";
     var now = performance.now();
-    if (dir === lastDir || now - lastDirAt < 6000) return;
+    if (dir === lastDir || now - lastDirAt < 7000) return;
     lastDir = dir; lastDirAt = now;
-    var t = "Tečka je " + dir + ".";
-    speak(t);
+    speak("Světýlko je " + dir + ".");
   }
-  /* Duch houká z reproduktoru: čím blíž, tím hlasitěji a častěji */
-  var nextHoo = 0;
-  function hoo(f, vol) {
-    if (!soundOn) return;
-    var c = audio(); if (!c) return;
-    var n = c.currentTime, o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
-    o.type = "sine"; lfo.frequency.value = 6; lg.gain.value = f * 0.04;
-    lfo.connect(lg); lg.connect(o.frequency);
-    o.frequency.setValueAtTime(f * 0.9, n); o.frequency.linearRampToValueAtTime(f * 1.25, n + 0.35);
-    o.frequency.setValueAtTime(f * 1.2, n + 0.5); o.frequency.exponentialRampToValueAtTime(f * 0.7, n + 1.3);
-    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.12);
-    g.gain.setValueAtTime(vol, n + 0.4); g.gain.exponentialRampToValueAtTime(vol * 0.3, n + 0.5);
-    g.gain.exponentialRampToValueAtTime(vol, n + 0.65); g.gain.exponentialRampToValueAtTime(0.0001, n + 1.4);
-    o.connect(g); g.connect(out()); o.start(n); lfo.start(n); o.stop(n + 1.45); lfo.stop(n + 1.45);
-  }
-  /* Zombie neházká, ale chrčí: nízký drsný tón přes filtr */
-  function groan(f, vol) {
-    if (!soundOn) return;
-    var c = audio(); if (!c) return;
-    var n = c.currentTime, o = c.createOscillator(), o2 = c.createOscillator(), flt = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
-    o.type = "sawtooth"; o2.type = "square"; flt.type = "lowpass"; flt.Q.value = 6;
-    lfo.frequency.value = 9; lg.gain.value = f * 0.12; lfo.connect(lg); lg.connect(o.frequency); lg.connect(o2.frequency);
-    o.frequency.setValueAtTime(f, n); o.frequency.linearRampToValueAtTime(f * 1.15, n + 0.5); o.frequency.exponentialRampToValueAtTime(f * 0.75, n + 1.5);
-    o2.frequency.setValueAtTime(f * 1.01, n); o2.frequency.exponentialRampToValueAtTime(f * 0.76, n + 1.5);
-    flt.frequency.setValueAtTime(300, n); flt.frequency.linearRampToValueAtTime(900, n + 0.45); flt.frequency.exponentialRampToValueAtTime(220, n + 1.5);
-    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.2); g.gain.setValueAtTime(vol, n + 0.9); g.gain.exponentialRampToValueAtTime(0.0001, n + 1.6);
-    o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(out());
-    [o, o2, lfo].forEach(function (x) { x.start(n); x.stop(n + 1.65); });
-  }
-  function hooLoop() {
+  /* Strašidlo se ozývá: zdálky slabě a s ozvěnou, zblízka zřetelně a častěji */
+  var nextCall = 0;
+  function callLoop() {
     var b = state === "play" ? nearest() : null, now = performance.now();
-    if (b && now >= nextHoo && b.d > catchR()) {
-      var k = clamp(1 - (b.d - 5) / 55, 0, 1);
-      var ch = CHARS[b.g.c];
-      if (ch.type === "zombie") groan(ch.hoo, 0.06 + 0.3 * k); else hoo(ch.hoo, 0.05 + 0.3 * k);
-      nextHoo = now + 6500 - 4000 * k;
+    if (b && now >= nextCall && b.d > catchR()) {
+      var k = clamp(1 - (b.d - 5) / 55, 0, 1), ch = CHARS[b.g.c];
+      if (ch.type === "zombie") groan(ch.hoo, 0.05 + 0.27 * k, 0.85 - 0.5 * k); else hoo(ch.hoo, 0.04 + 0.22 * k, 0.85 - 0.5 * k);
+      if (Math.random() < 0.3 + 0.4 * k) setTimeout(function () { whisper(0.03 + 0.08 * k, 1.6); }, 1400);
+      nextCall = now + 9000 - 5500 * k + rnd(-800, 800);
     }
-    setTimeout(hooLoop, 250);
+    setTimeout(callLoop, 250);
   }
-  function beepLoop() {
-    var next = 300;
-    if (state === "play" && level > 0.4) {
-      tone(520 + level * 230, 0.09, "square", 0.06);
-      if (level > 3.5) { try { navigator.vibrate && navigator.vibrate(40); } catch (e) {} }
-      next = Math.max(120, 1400 - level * 260);
+  /* Tlukot srdce místo pípání: čím blíž, tím rychlejší a hlasitější */
+  function heartLoop() {
+    var next = 400;
+    if (state === "play") {
+      var k = clamp(level / 10, 0, 1);
+      thump(0.18 + 0.32 * k);
+      if (k > 0.75) { try { navigator.vibrate && navigator.vibrate([30, 170, 20]); } catch (e) {} }
+      next = 1500 - 900 * k;
     }
-    setTimeout(beepLoop, next);
+    setTimeout(heartLoop, next);
   }
 
   /* ---------- Ovládání ---------- */
+  function setToggle(btn, on) {
+    btn.setAttribute("aria-pressed", on);
+    var a = btn.querySelector(".on"), b = btn.querySelector(".off");
+    if (a) a.toggleAttribute("hidden", !on); if (b) b.toggleAttribute("hidden", on);
+  }
   beginBtn.addEventListener("click", function () { begin(false); });
   resumeBtn.addEventListener("click", function () { begin(true); });
   testBtn.addEventListener("click", startTest);
@@ -850,24 +827,27 @@
     var uri = this.value;
     csVoice = csVoices.filter(function (v) { return v.voiceURI === uri; })[0] || csVoice;
     try { localStorage.setItem(VOICE_KEY, uri); } catch (e) {}
-    speak("Ahoj, já budu tvůj průvodce. Jdeme lovit strašidla!", true);
+    speak("Tři strašidla se ukryla v šeru. Jdeme je hledat.", true);
   });
   $("#sndtest").addEventListener("click", function () {
-    soundOn = true; voiceOn = true; unlock();
-    jingle(); setTimeout(function () { hoo(400, 0.3); }, 700); setTimeout(function () { groan(110, 0.3); }, 2300);
-    setTimeout(function () { speak("Zvuk funguje. Slyšíš mě?", true); }, 4000);
+    soundOn = true; voiceOn = true; setToggle($("#sound"), true); setToggle($("#voice"), true); unlock();
+    thump(0.4); setTimeout(function () { thump(0.4); }, 900);
+    setTimeout(function () { hoo(380, 0.25, 0.5); }, 1800);
+    setTimeout(function () { groan(110, 0.3, 0.4); }, 4200);
+    setTimeout(function () { bell(147, 0.15, 5); }, 6300);
+    setTimeout(function () { speak("Slyšíš mě? Zvuk funguje.", true); }, 7000);
     var c = ctx ? ctx.state : "žádný";
-    msg.textContent = "Hraje melodie, houkání a chrčení, pak promluví hlas. " +
-      (c !== "running" ? "Zvuk je zatím zablokovaný (" + c + "), ťukni znovu. " : "") +
-      (!("speechSynthesis" in window) ? "Tenhle prohlížeč neumí mluvit. " : !csVoice ? "Telefon nemá český hlas, hlas může mluvit anglicky nebo mlčet. " : voiceScore(csVoice) < 4 ? "Hlas: " + csVoice.name + ". Lepší hlas si můžeš stáhnout v nastavení telefonu. " : "Hlas: " + csVoice.name + ". ") +
-      "Nic neslyšíš? Zesil hlasitost a na iPhonu vypni tichý režim.";
+    msg.textContent = "Srdce, houkání, chrčení, zvon a hlas. " +
+      (c !== "running" ? "Zvuk je zatím zablokovaný, ťukni znovu. " : "") +
+      (!("speechSynthesis" in window) ? "Tenhle prohlížeč neumí mluvit. " : !csVoice ? "Telefon nemá český hlas. " : voiceScore(csVoice) < 4 ? "Hlas: " + csVoice.name + ". Lepší hlas stáhneš v nastavení telefonu. " : "Hlas: " + csVoice.name + ". ") +
+      "Nic neslyšíš? Zesil hlasitost, na iPhonu vypni tichý režim.";
   });
   $("#newgame").addEventListener("click", toIntro);
   $("#tl").addEventListener("click", function () { testHeading = (testHeading - 30 + 360) % 360; });
   $("#tr").addEventListener("click", function () { testHeading = (testHeading + 30) % 360; });
   $("#tf").addEventListener("click", function () { if (test && pos) pos = offset(pos, 3, testHeading); });
-  $("#sound").addEventListener("click", function () { soundOn = !soundOn; this.setAttribute("aria-pressed", soundOn); this.textContent = soundOn ? "🔊" : "🔇"; });
-  $("#voice").addEventListener("click", function () { voiceOn = !voiceOn; this.setAttribute("aria-pressed", voiceOn); this.textContent = voiceOn ? "🗣️" : "🤐"; if (!voiceOn) hush(); });
+  $("#sound").addEventListener("click", function () { soundOn = !soundOn; setToggle(this, soundOn); ambience(soundOn && (state === "play" || state === "pick")); });
+  $("#voice").addEventListener("click", function () { voiceOn = !voiceOn; setToggle(this, voiceOn); if (!voiceOn) hush(); });
   var fsBtn = $("#fs");
   if (!document.documentElement.requestFullscreen) fsBtn.hidden = true;
   fsBtn.addEventListener("click", function () {
@@ -876,9 +856,10 @@
       else document.documentElement.requestFullscreen().catch(function () {});
     } catch (e) {}
   });
-  document.addEventListener("fullscreenchange", function () { fsBtn.textContent = document.fullscreenElement ? "✕" : "⛶"; });
+  document.addEventListener("fullscreenchange", function () { setToggle(fsBtn, !document.fullscreenElement); });
+  if (!fsBtn.hidden) $(".ctl").style.gridTemplateColumns = "2fr 1fr 1fr 1fr 1fr"; else $(".ctl").style.gridTemplateColumns = "2fr 1fr 1fr 1fr";
 
-  frame(); beepLoop(); hooLoop();
+  frame(); callLoop(); heartLoop();
 })();
 </script>
 </body>
