@@ -328,6 +328,11 @@
   .voicerow { display: flex; align-items: center; gap: 10px; }
   .voicerow span { font: 600 10px/1 var(--label); letter-spacing: .24em; text-transform: uppercase; color: var(--dim); }
   .voicerow select { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: rgba(16, 20, 19, .8); color: var(--fg); font: 15px/1.3 var(--serif); }
+  .failbox { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid rgba(var(--blood-rgb), .7); border-radius: 10px; background: rgba(var(--blood-rgb), .14); }
+  .failbox b { font: 600 11px/1.3 var(--label); letter-spacing: .22em; text-transform: uppercase; color: #e9a497; }
+  .failbox span { font: 500 16px/1.4 var(--serif); color: var(--fg); }
+  .failbox .btn { align-self: flex-start; padding: 10px 22px; }
+  .msg:empty { display: none; }
   .msg { min-height: 2.6em; font: italic 500 16px/1.4 var(--serif); color: var(--ember); }
 
   .reveal { text-align: center; background: radial-gradient(ellipse at 50% 40%, #090d0b 0, #010202 70%); }
@@ -509,7 +514,9 @@
 <section class="overlay intro" id="intro">
   <div class="overlay-in">
     <p class="kicker">Detektor strašidel</p>
+    <div class="failbox" id="failbox" hidden role="alert"><b>Duchové se neschovali</b><span id="failtxt"></span><button class="btn" id="retry" type="button" aria-label="Zkusit znovu" title="Zkusit znovu"><span class="ms" aria-hidden="true">refresh</span></button></div>
     <h1>Lovci duchů</h1>
+    <p class="msg" id="msg" aria-live="polite"></p>
     <p class="sub">Venku, za šera, poslouchej.</p>
     <p>Detektor kolem tebe zachytí strašidla. Na radaru se objeví duchové. Ťukni na jednoho a jdi za ním. Až budeš blízko, uslyšíš ho. Strašidla se schovávají u chodníků a cest. Každé je jiné: plaché uteče, když běžíš, spáč se probudí, když s detektorem třeseš, zvědavec se připlíží, když stojíš, a schovávač umí vyděsit. Než ho chytíš, musíš ho zakreslit do kruhu nebo na něj nahlas říct zaklínadlo.</p>
     <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. <span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_car</span> Z auta: pět strašidel se postupně objevuje na silnici, po které jedete, asi kilometr před autem. Hraje jen spolujezdec, nikdy řidič. Je potřeba zapnutá poloha (GPS).</span></div>
@@ -527,7 +534,6 @@
       </div>
       <label class="voicerow" id="voicerow" hidden><span>Hlas</span><select id="voicesel" aria-label="Hlas vypravěče"></select></label>
     </div>
-    <p class="msg" id="msg" aria-live="polite"></p>
   </div>
 </section>
 
@@ -887,20 +893,21 @@
         return d;
       }, function (e) { clearTimeout(tm); throw e; });
   }
+  var lastNetErr = "";
   function firstOf(ps) {
     return new Promise(function (res, rej) {
       var left = ps.length; if (!left) { rej(new Error("none")); return; }
-      ps.forEach(function (p) { p.then(res, function () { if (--left === 0) rej(new Error("all")); }); });
+      ps.forEach(function (p) { p.then(res, function (e) { lastNetErr = String(e && e.message || e).slice(0, 80); if (--left === 0) rej(new Error(lastNetErr)); }); });
     });
   }
   function overpass(q, ms) {
     ms = ms || 9000;
     var urls = OVERPASS.map(function (sv) { return sv + "?data=" + encodeURIComponent(q); });
     /* tři servery naráz, vyhrává první platná odpověď */
-    return firstOf(urls.slice(0, 3).map(function (u) { return fetchJSON(u, ms).then(function (d) { overpassHost = u.split("/")[2]; return d; }); }))
+    return firstOf(urls.slice(0, 2).map(function (u) { return fetchJSON(u, ms).then(function (d) { overpassHost = u.split("/")[2]; return d; }); }))
       .catch(function () {
-        var k = 3;
-        function next() { if (k >= urls.length) return Promise.reject(new Error("overpass")); return fetchJSON(urls[k++], ms).catch(next); }
+        var k = 2;
+        function next(e) { if (e) lastNetErr = String(e && e.message || e).slice(0, 80); if (k >= urls.length) return Promise.reject(new Error(lastNetErr || "overpass")); var u = urls[k++]; return fetchJSON(u, ms).then(function (d) { overpassHost = u.split("/")[2]; return d; }).catch(next); }
         return next();
       })
       .then(function (d) { return d.elements || []; });
@@ -973,9 +980,9 @@
     /* jen ulice a cesty v malém výřezu kolem hráče (asi 220 × 220 m): malý a rychlý dotaz */
     var sw = offset(offset(o, 110, 180), 110, 270), ne = offset(offset(o, 110, 0), 110, 90);
     var bb = sw.lat.toFixed(6) + "," + sw.lon.toFixed(6) + "," + ne.lat.toFixed(6) + "," + ne.lon.toFixed(6);
-    var q = "[out:json][timeout:10][maxsize:8388608][bbox:" + bb + "];" +
-      "way[highway~\"^(residential|living_street|pedestrian|unclassified|tertiary|secondary|footway|path|cycleway|track|steps)$\"];out tags geom;";
-    return overpass(q, 15000).then(function (els) {
+    var q = "[out:json][timeout:15];" +
+      "way(" + bb + ")[highway~\"^(residential|living_street|pedestrian|unclassified|tertiary|secondary|footway|path|cycleway|track|steps)$\"];out tags geom;";
+    return overpass(q, 12000).then(function (els) {
       var pk = packEls(els), area = parseWalkArea(o, unpackEls(pk)); /* stejná data jako z paměti */
       try { localStorage.setItem(MAP_KEY, JSON.stringify({ lat: o.lat, lon: o.lon, at: Date.now(), pk: pk })); } catch (e) {}
       mapInfo = { src: overpassHost, ms: performance.now() - t0 };
@@ -1322,7 +1329,7 @@
     var gen = ++bootGen, mine = ghosts;
     /* pěšky strašidla smějí jen na chodníky a cesty venku; bez mapy okolí se nehraje (kromě zkoušky doma) */
     var loadArea = function () {
-      return Promise.race([areaFor(origin), new Promise(function (r) { setTimeout(function () { r(null); }, 30000); })]);
+      return Promise.race([areaFor(origin), new Promise(function (r) { setTimeout(function () { r(null); }, 25000); })]);
     };
     var mapFail = false, failWhy = "map";
     var placing = mode === "walk" && !savedGame
@@ -1354,7 +1361,7 @@
           ? "Kolem tebe nevidím chodníky ani cesty, kam se dá bezpečně dojít. Vyjdi na ulici nebo do parku a zkus to znovu. (" + diagText() + ")"
           : "Nepodařilo se načíst mapu okolí. Bez ní nevím, kde je bezpečně venku, tak duchy neschovám. Zkus to za chvilku znovu.";
         if (mapInfo && mapInfo.src.indexOf("chyba") === 0) m += " (" + mapInfo.src + ")";
-        msg.textContent = m; speak(m, true); return;
+        showFail(m); speak(m, true); return;
       }
       radar.classList.remove("boot"); ambience(true);
       var pre = savedGame ? "Pokračujeme. " : "";
@@ -1921,7 +1928,7 @@
     audio(); test = false; goFull();
     if (resume) { var sv = loadSave(); setMode(sv && sv.mode || "walk"); } else setMode(m || "walk");
     if (!navigator.geolocation) { msg.textContent = "Tenhle prohlížeč neumí zjistit polohu."; return; }
-    beginBtn.disabled = true; resumeBtn.disabled = true; $("#carbtn").disabled = true;
+    beginBtn.disabled = true; resumeBtn.disabled = true; $("#carbtn").disabled = true; $("#failbox").hidden = true;
     msg.textContent = "Povol polohu a kompas, až se telefon zeptá.";
     var cp = compassPermission(); /* musí se zavolat hned v gestu uživatele */
     resumeData = resume ? loadSave() : null;
@@ -1931,6 +1938,13 @@
       watchId = navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
     });
   }
+  /* chyba nahoře na úvodu, ať je vidět bez posouvání, s tlačítkem Zkusit znovu */
+  var failMode = "walk";
+  function showFail(m) {
+    failMode = mode; $("#failtxt").textContent = m; $("#failbox").hidden = false; msg.textContent = "";
+    try { intro.scrollTop = 0; } catch (e) {}
+  }
+  $("#retry").addEventListener("click", function () { $("#failbox").hidden = true; begin(false, failMode); });
   function startTest() {
     setMode("walk"); goFull();
     audio(); test = true; testHeading = 0; acc = 5; pos = { lat: 50.0755, lon: 14.4378 };
