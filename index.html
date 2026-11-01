@@ -308,10 +308,10 @@
     position: fixed; inset: 0; z-index: 20; background: radial-gradient(ellipse at 50% 35%, #0c1210 0, var(--bg) 70%);
     padding-block: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-bottom, 0px));
     padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
-    display: flex; flex-direction: column; overflow: auto;
+    display: flex; flex-direction: column; overflow: hidden;
   }
   .overlay-in { position: relative; z-index: 2; max-width: 500px; width: 100%; margin: auto; display: flex; flex-direction: column; gap: 16px; }
-  .intro .kicker { margin: 0 0 -4px; font: 500 10px/1 var(--label); letter-spacing: .32em; text-transform: uppercase; color: var(--ember); opacity: .85; }
+  .intro .kicker, .rulesbox .kicker, .gallerybox .kicker { margin: 0 0 -4px; font: 500 10px/1 var(--label); letter-spacing: .32em; text-transform: uppercase; color: var(--ember); opacity: .85; }
   .intro h1 { margin: 0; font: 500 52px/1 var(--serif); letter-spacing: .02em; color: var(--fg); animation: dim 7s ease-in-out infinite; text-shadow: 0 0 30px rgba(var(--ghost-rgb), .12); }
   @keyframes dim { 0%, 100% { opacity: 1; } 46% { opacity: 1; } 48% { opacity: .55; } 50% { opacity: .95; } 52% { opacity: .7; } 54% { opacity: 1; } }
   .intro .sub { margin: -6px 0 0; font: italic 500 21px/1.3 var(--serif); color: var(--dim); }
@@ -336,19 +336,25 @@
   .msg { min-height: 2.6em; font: italic 500 16px/1.4 var(--serif); color: var(--ember); }
 
   .reveal { text-align: center; background: radial-gradient(ellipse at 50% 40%, #090d0b 0, #010202 70%); }
-  .reveal .overlay-in { align-items: center; gap: 18px; }
+  .reveal .overlay-in { align-items: center; gap: clamp(6px, 1.8vh, 18px); height: 100%; margin: 0 auto; justify-content: center; min-height: 0; }
+  .reveal .overlay-in > * { flex: none; }
+  .reveal #stage, .reveal .photo { flex: 0 1 auto; min-height: 0; }
+  .reveal .photo { display: flex; justify-content: center; }
+  .reveal .photo img { width: auto !important; max-width: min(86vw, 420px); max-height: 100% !important; height: auto; }
+  .reveal .rsteps { font-size: clamp(13px, 2.2vh, 16px); line-height: 1.4; }
+  .eyes { max-height: 18vh; }
   .eyes { width: min(72vw, 340px); height: auto; opacity: 0; animation: eyesIn 4.5s ease-out .5s forwards; }
   .eyes .lid { transform-box: fill-box; transform-origin: center; animation: blink 5.5s ease-in-out 2.4s infinite; }
   @keyframes eyesIn { 0% { opacity: 0; transform: translateY(6px) scale(.96); } 35% { opacity: .9; } 100% { opacity: .75; transform: none; } }
   @keyframes blink { 0%, 90%, 100% { transform: scaleY(1); } 93%, 95% { transform: scaleY(.05); } }
-  .reveal h2 { margin: 0; font: italic 500 40px/1.1 var(--serif); color: var(--fg); opacity: 0; animation: rise 1.6s ease-out .2s forwards; }
-  .reveal .quote { margin: 0; padding: 12px 18px; font: 500 21px/1.4 var(--serif); color: var(--fg); max-width: 20em; text-wrap: pretty; opacity: 0; animation: rise 1.6s ease-out 1s forwards;
+  .reveal h2 { margin: 0; font: italic 500 clamp(28px, 5.5vh, 40px)/1.1 var(--serif); color: var(--fg); opacity: 0; animation: rise 1.6s ease-out .2s forwards; }
+  .reveal .quote { margin: 0; padding: clamp(6px, 1.4vh, 12px) 18px; font: 500 clamp(16px, 2.8vh, 21px)/1.35 var(--serif); color: var(--fg); max-width: 20em; text-wrap: pretty; opacity: 0; animation: rise 1.6s ease-out 1s forwards;
     border-top: 1px solid rgba(var(--ember-rgb), .45); border-bottom: 1px solid rgba(var(--ember-rgb), .2); }
   .reveal .quote:empty { display: none; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .score { display: flex; gap: 22px; justify-content: center; align-items: flex-end; }
-  .score .candle { width: 26px; height: 58px; }
-  .reveal .btn { width: 100%; max-width: 340px; padding: 18px 12px; opacity: 0; animation: rise 1s ease-out 1.8s forwards; }
+  .score .candle { width: clamp(17px, 3vh, 26px); height: clamp(38px, 6.6vh, 58px); }
+  .reveal .btn { width: 100%; max-width: 340px; padding: clamp(8px, 1.8vh, 18px) 12px; opacity: 0; animation: rise 1s ease-out 1.8s forwards; }
   .reveal .btn .ms { font-size: 40px; }
   .time { font: 400 15px/1 var(--mono); color: var(--dim); letter-spacing: .08em; }
   /* fotka s duchem po nálezu */
@@ -356,7 +362,7 @@
   .photo img { display: block; width: min(86vw, 420px); max-height: 44vh; object-fit: contain; border-radius: 6px; box-shadow: 0 0 0 1px rgba(216, 214, 203, .14), 0 14px 40px rgba(0, 0, 0, .75); animation: develop 2.4s ease-out both; }
   @keyframes develop { from { opacity: 0; filter: brightness(2.2) blur(6px); } to { opacity: 1; filter: none; } }
   .photobtns { display: flex; gap: 10px; justify-content: center; opacity: 0; animation: rise 1s ease-out 1.6s forwards; }
-  .reveal .photobtns .btn { width: auto; min-width: 92px; padding: 14px 22px; opacity: 1; animation: none; }
+  .reveal .photobtns .btn { width: auto; min-width: 92px; padding: clamp(8px, 1.6vh, 14px) 22px; opacity: 1; animation: none; }
   /* popisky pod ikonami, řádek „Co teď“, kroky po nálezu, galerie */
   .btn .lbl { display: block; margin-top: 4px; font: 600 10px/1.1 var(--label, var(--mono)); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
   .btn.primary .lbl { color: inherit; opacity: .85; }
@@ -368,7 +374,23 @@
   .rsteps li.done { color: var(--faint); text-decoration: line-through; }
   .rsteps li.cur { color: var(--fg); }
   .ghint { margin: 0; text-align: center; font: italic 500 20px/1.3 var(--serif); color: #efe4cf; text-shadow: 0 1px 8px #000; }
-  .gallerybox .overlay-in { gap: 14px; }
+  .gallerybox .overlay-in { gap: 12px; height: 100%; margin: 0 auto; }
+  .gallerybox h2 { margin: 0; font: italic 500 clamp(24px, 4.5vh, 34px)/1.1 var(--serif); }
+  .gallerybox .ggrid { flex: 1 1 auto; min-height: 0; align-content: start; }
+  .ggrid img { max-height: calc((100dvh - 260px) / 3); }
+  .gpager { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 10px; }
+  .gpager .btn:disabled { opacity: .2; }
+  /* úvod a pravidla: vše na jednu obrazovku, písmo podle výšky */
+  .intro .lead { font-size: clamp(15px, 2.5vh, 18px); color: var(--fg); }
+  .rulesbox .overlay-in { gap: clamp(8px, 1.6vh, 16px); }
+  .rulesbox .rtext { margin: 0; color: var(--fg); font-size: clamp(13.5px, 2.25vh, 17px); line-height: 1.4; }
+  .rulesbox .note { font-size: clamp(13px, 2.1vh, 16px); line-height: 1.4; padding: 10px 12px; }
+  @media (max-height: 700px) {
+    .intro h1 { font-size: 42px; }
+    .intro .sub { font-size: 18px; }
+    .intro .overlay-in { gap: 12px; }
+    .intro .btn.primary { padding: 14px 12px; }
+  }
   .ggrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .ggrid img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 1px rgba(216, 214, 203, .14); cursor: pointer; }
   .gempty { color: var(--dim); }
@@ -404,8 +426,8 @@
   #gshot { padding: 20px 8px; opacity: .55; }
   #gshot .ms { font-size: 44px; }
   .gcam.ready #gshot { opacity: 1; color: #f2e6d8; border-color: rgba(201, 164, 106, .8); box-shadow: 0 0 34px rgba(201, 164, 106, .55); animation: breathe 1.2s ease-in-out infinite; }
-  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; width: min(86vw, 420px); margin-top: 12px; }
-  .gallery img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 1px rgba(216, 214, 203, .14); }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 8px; width: min(86vw, 420px); margin-top: 12px; }
+  .gallery img { max-height: 22vh; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 1px rgba(216, 214, 203, .14); }
   @media (prefers-reduced-motion: reduce) { .photo img, .photobtns { animation: none !important; opacity: 1; } }
 
   /* Rituál před nálezem: kruh prstem, zaklínadlo nahlas, nebo klid */
@@ -567,8 +589,7 @@
     <h1>Lovci duchů</h1>
     <p class="msg" id="msg" aria-live="polite"></p>
     <p class="sub">Venku, za šera, poslouchej.</p>
-    <p>Detektor kolem tebe zachytí strašidla. Na radaru se objeví duchové. Ťukni na jednoho a jdi za ním. Až budeš blízko, uslyšíš ho. Strašidla se schovávají u chodníků a cest. Každé je jiné: plaché uteče, když běžíš, spáč se probudí, když s detektorem třeseš, zvědavec se připlíží, když stojíš, a schovávač umí vyděsit. Než ho chytíš, musíš ho zakreslit do kruhu nebo na něj nahlas říct zaklínadlo.</p>
-    <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. <span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_car</span> Z auta: pět strašidel se postupně objevuje na silnici, po které jedete, asi kilometr před autem. Hraje jen spolujezdec, nikdy řidič. Je potřeba zapnutá poloha (GPS).</span></div>
+    <p class="lead">Hledej strašidla s detektorem. Vyber, jestli jdeš pěšky, nebo jedeš autem.</p>
     <div class="note" id="ioshint" hidden><b>Přes celou obrazovku</b><span>Na iPhonu ťukni na Sdílet a pak Přidat na plochu. Detektor se pak otevře jako aplikace bez lišt prohlížeče.</span></div>
     <div class="btns">
       <div class="modes">
@@ -579,6 +600,7 @@
         <button class="btn" id="resume" type="button" hidden aria-label="Pokračovat v rozehrané hře" title="Pokračovat v rozehrané hře"><span class="ms" aria-hidden="true">resume</span><span class="lbl" aria-hidden="true">Pokračovat</span></button>
         <button class="btn" id="testbtn" type="button" aria-label="Zkouška doma bez GPS" title="Zkouška doma bez GPS"><span class="ms" aria-hidden="true">home</span><span class="lbl" aria-hidden="true">Zkouška doma</span></button>
         <button class="btn" id="sndtest" type="button" aria-label="Test zvuku" title="Test zvuku"><span class="ms" aria-hidden="true">hearing</span><span class="lbl" aria-hidden="true">Test zvuku</span></button>
+        <button class="btn" id="rulesbtn" type="button" aria-label="Jak se hraje" title="Jak se hraje"><span class="ms" aria-hidden="true">menu_book</span><span class="lbl" aria-hidden="true">Jak hrát</span></button>
         <button class="btn" id="galbtn" type="button" aria-label="Galerie fotek duchů" title="Galerie"><span class="ms" aria-hidden="true">photo_library</span><span class="lbl" aria-hidden="true">Galerie</span></button>
         <button class="btn" id="introsettings" type="button" aria-label="Nastavení: zvuk, lekačky, vibrace" title="Nastavení"><span class="ms" aria-hidden="true">settings</span><span class="lbl" aria-hidden="true">Nastavení</span></button>
       </div>
@@ -624,13 +646,25 @@
   </div>
 </section>
 
+<section class="overlay rulesbox" id="rules" hidden aria-label="Jak se hraje">
+  <div class="overlay-in">
+    <p class="kicker">Jak se hraje</p>
+    <p class="rtext">Detektor kolem tebe zachytí strašidla. Na radaru se objeví duchové. Ťukni na jednoho a jdi za ním. Až budeš blízko, uslyšíš ho. Strašidla se schovávají u chodníků a cest. Každé je jiné: plaché uteče, když běžíš, spáč se probudí, když s detektorem třeseš, zvědavec se připlíží, když stojíš, a schovávač umí vyděsit. Než ho chytíš, musíš ho zakreslit do kruhu nebo na něj nahlas říct zaklínadlo.</p>
+    <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. <span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_car</span> Z auta: pět strašidel se postupně objevuje na silnici, po které jedete, asi kilometr před autem. Hraje jen spolujezdec, nikdy řidič. Je potřeba zapnutá poloha (GPS).</span></div>
+    <button class="btn" id="rulesclose" type="button" aria-label="Zpět" title="Zpět"><span class="ms" aria-hidden="true">arrow_back</span><span class="lbl" aria-hidden="true">Zpět</span></button>
+  </div>
+</section>
 <section class="overlay gallerybox" id="gallery" hidden aria-label="Galerie">
   <div class="overlay-in">
     <p class="kicker">Galerie</p>
     <h2>Vyfocení duchové</h2>
     <p class="gempty" id="gempty">Zatím tu nic není. Po nálezu vyfoťte ducha duchokamerou a fotka se uloží sem.</p>
     <div class="ggrid" id="ggrid"></div>
-    <button class="btn" id="galclose" type="button" aria-label="Zpět" title="Zpět"><span class="ms" aria-hidden="true">arrow_back</span><span class="lbl" aria-hidden="true">Zpět</span></button>
+    <div class="gpager">
+      <button class="btn" id="gprev" type="button" aria-label="Předchozí" title="Předchozí"><span class="ms" aria-hidden="true">chevron_left</span></button>
+      <button class="btn" id="galclose" type="button" aria-label="Zpět" title="Zpět"><span class="ms" aria-hidden="true">arrow_back</span><span class="lbl" aria-hidden="true">Zpět</span></button>
+      <button class="btn" id="gnext" type="button" aria-label="Další" title="Další"><span class="ms" aria-hidden="true">chevron_right</span></button>
+    </div>
   </div>
 </section>
 <section class="viewer" id="viewer" hidden aria-label="Fotka">
@@ -2324,7 +2358,7 @@
   /* duch do obrazu: vodorovně podle odchylky od jeho směru; při poruše se rozpadá na pruhy */
   function drawGhostInto(c, W, H, delta, a, look, glitch) {
     var sp = sprite(look), h = H * (look === "prosteradlo" ? 0.42 : look === "orby" ? 0.5 : look === "klekanice" ? 0.78 : 0.62) * (gcam && gcam.lunge ? 1 + gcam.lunge : 1), w = h * sp.width / sp.height;
-    var x = W / 2 + (delta / HFOV) * W - w / 2, y = H * 0.94 - h + Math.sin(performance.now() / 700) * H * 0.01;
+    var x = W / 2 + (delta / HFOV) * W - w / 2, y = Math.max(H * 0.03, H * 0.94 - h) + Math.sin(performance.now() / 700) * H * 0.01;
     c.save(); c.globalAlpha = clamp(a, 0, 1); c.globalCompositeOperation = DARK_LOOKS[look] ? "source-over" : "screen";
     if (glitch) {
       var strips = 7;
@@ -2399,13 +2433,17 @@
     return galDB().then(function (db) { return new Promise(function (res) { var out = [], cur = db.transaction("photos").objectStore("photos").openCursor(); cur.onsuccess = function () { var c2 = cur.result; if (c2) { out.push(c2.value); c2.continue(); } else res(out.reverse()); }; cur.onerror = function () { res(out); }; }); }).catch(function () { return []; });
   }
   function galleryDel(id) { return galDB().then(function (db) { db.transaction("photos", "readwrite").objectStore("photos").delete(id); }).catch(function () {}); }
-  var galUrls = [], viewing = null;
+  var galUrls = [], viewing = null, galPage = 0;
   function openGallery() {
     $("#gallery").hidden = false; var grid = $("#ggrid"); grid.innerHTML = "";
     galUrls.forEach(function (u) { URL.revokeObjectURL(u); }); galUrls = [];
     galleryAll().then(function (list) {
       $("#gempty").hidden = list.length > 0;
-      list.forEach(function (ph) {
+      /* po stránkách, ať se nic neposouvá: 6 fotek na nízkém telefonu, jinak 9 */
+      var per = window.innerHeight < 720 ? 6 : 9, pages = Math.max(1, Math.ceil(list.length / per));
+      galPage = clamp(galPage, 0, pages - 1);
+      $("#gprev").disabled = galPage <= 0; $("#gnext").disabled = galPage >= pages - 1;
+      list.slice(galPage * per, galPage * per + per).forEach(function (ph) {
         var u = URL.createObjectURL(ph.blob); galUrls.push(u);
         var im = document.createElement("img"); im.src = u; im.alt = ph.name;
         im.addEventListener("click", function () { viewing = ph; $("#vimg").src = u; $("#vimg").alt = ph.name; $("#viewer").hidden = false; });
@@ -2413,7 +2451,11 @@
       });
     });
   }
-  $("#galbtn").addEventListener("click", openGallery);
+  $("#galbtn").addEventListener("click", function () { galPage = 0; openGallery(); });
+  $("#rulesbtn").addEventListener("click", function () { $("#rules").hidden = false; });
+  $("#rulesclose").addEventListener("click", function () { $("#rules").hidden = true; });
+  $("#gprev").addEventListener("click", function () { galPage--; openGallery(); });
+  $("#gnext").addEventListener("click", function () { galPage++; openGallery(); });
   $("#galclose").addEventListener("click", function () { $("#gallery").hidden = true; });
   $("#vclose").addEventListener("click", function () { $("#viewer").hidden = true; });
   $("#vshare").addEventListener("click", function () { if (viewing) saveToPhone(viewing.blob, viewing.name); });
