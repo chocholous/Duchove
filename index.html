@@ -147,8 +147,8 @@
   /* mapa a její popisek (vkládá se skriptem do radaru) */
   .radar .map { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; mix-blend-mode: screen; opacity: 0; transition: opacity 1.5s; pointer-events: none; }
   /* světlá mapa OSM -> negativ, bez barev, do zeleného fosforu */
-  .radar .map { filter: invert(1) grayscale(1) sepia(.35) hue-rotate(95deg) brightness(.75) contrast(1.6); }
-  .radar.mapon .map { opacity: .42; }
+  .radar .map { filter: invert(1) grayscale(1) sepia(.5) hue-rotate(95deg) brightness(1.15) contrast(1.35); }
+  .radar.mapon .map { opacity: .72; }
   .radar .attr { position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); z-index: 4; font: 400 7px/1 var(--mono); letter-spacing: .04em; color: rgba(var(--ghost-rgb), .4); white-space: nowrap; pointer-events: none; }
   .radar .attr a { color: inherit; text-decoration: none; }
 
@@ -189,6 +189,11 @@
   .me::after { content: ""; position: absolute; inset: -180%; border-radius: 50%; border: 1px solid rgba(var(--ghost-rgb), .25); }
   .north { position: absolute; top: 7.5%; left: 50%; transform: translateX(-50%); font: 600 11px/1 var(--label); letter-spacing: .2em; color: rgba(var(--ghost-rgb), .55); text-shadow: 0 0 6px rgba(var(--ghost-rgb), .4); transition: opacity .5s; }
   .radar.off .north { opacity: .25; }
+  /* růžice se otáčí podle kompasu: sever (N a červená značka) ukazuje skutečný sever, nahoře je vždy směr, kam se díváš */
+  .rose { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; will-change: transform; }
+  .rose .north { color: #e9b7ad; text-shadow: 0 0 8px rgba(168, 68, 58, .7); }
+  .nmark { position: absolute; left: 50%; top: 2.2%; width: 0; height: 0; margin-left: -6px; border: 6px solid transparent; border-bottom: 10px solid #c0524a; border-top: 0; filter: drop-shadow(0 0 4px rgba(192, 82, 74, .8)); }
+  .fwd { position: absolute; left: 50%; top: -1px; width: 2px; height: 5.5%; margin-left: -1px; background: linear-gradient(rgba(var(--ghost-rgb), .9), transparent); box-shadow: 0 0 6px rgba(var(--ghost-rgb), .7); pointer-events: none; z-index: 2; }
   /* sklo: řádkování obrazovky a odlesk; nad vším, ale propouští ťuknutí */
   .glass { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; z-index: 3;
     background:
@@ -352,7 +357,8 @@
   }
   @media (max-width: 370px) { .leds { gap: 10px; } .plate .model { display: none; } .top { padding-inline: 4px; } }
   @media (prefers-reduced-motion: reduce) {
-    .fog::before, .fog::after, .grain, .sweep, .dot, .candle .flame, .intro h1, #catch, .eyes .lid, .led i, .bootlabel, .state, .sheet-in { animation: none !important; }
+    .sweep { animation-duration: 14s !important; }
+    .fog::before, .fog::after, .grain, .dot, .candle .flame, .intro h1, #catch, .eyes .lid, .led i, .bootlabel, .state, .sheet-in { animation: none !important; }
     .eyes, .reveal h2, .reveal .quote, .reveal .btn { animation: none !important; opacity: 1; }
     .radar.boot .bootlabel { opacity: .9; }
   }
@@ -382,9 +388,9 @@
   <div class="stagebox">
     <div class="scope">
       <div class="radar off" id="radar">
-        <div class="grid" aria-hidden="true"></div>
+        <div class="rose" id="rose" aria-hidden="true"><div class="grid"></div><div class="north" id="north">N</div><i class="nmark"></i></div>
         <div class="sweep" aria-hidden="true"></div>
-        <div class="north" id="north" aria-hidden="true">N</div>
+        <i class="fwd" aria-hidden="true"></i>
         <div class="me" aria-hidden="true"></div>
         <div class="bootlabel" aria-hidden="true">KALIBRACE</div>
         <div class="glass" aria-hidden="true"></div>
@@ -559,6 +565,7 @@
   }
   /* Při každém ťuknutí odemkne zvuk i hlas (prohlížeče to dovolí jen během dotyku). Tiché <audio> přepne iPhone do přehrávání i s vypínačem ticha. */
   function unlock() {
+    if (!compassAsked && window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") compassPermission();
     var c = audio();
     try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
     if (c) { try { var buf = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination); src.start(0); } catch (e) {} }
@@ -974,7 +981,9 @@
     if (h === null) return;
     heading = h; headingAt = performance.now();
   }
+  var lastFix = null, trackHeading = null, trackAt = 0, compassAsked = false;
   async function compassPermission() {
+    compassAsked = true;
     try {
       if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") {
         var r = await DeviceOrientationEvent.requestPermission();
@@ -993,7 +1002,8 @@
     if (test) return { h: testHeading, src: "zkouška" };
     if (mode === "car" && gpsHeading !== null && now - gpsHeadAt < 6000) return { h: gpsHeading, src: "směr jízdy" };
     if (heading !== null && now - headingAt < 2000) return { h: heading, src: "kompas" };
-    if (gpsHeading !== null && now - gpsHeadAt < 4000) return { h: gpsHeading, src: "směr chůze" };
+    if (gpsHeading !== null && now - gpsHeadAt < 4000) return { h: gpsHeading, src: mode === "car" ? "směr jízdy" : "směr chůze" };
+    if (trackHeading !== null && now - trackAt < (mode === "car" ? 15000 : 8000)) return { h: trackHeading, src: mode === "car" ? "směr jízdy" : "směr chůze" };
     return { h: null, src: "bez kompasu" };
   }
 
@@ -1003,6 +1013,9 @@
     pos = { lat: p.coords.latitude, lon: p.coords.longitude };
     acc = p.coords.accuracy || 99;
     if (typeof p.coords.heading === "number" && !isNaN(p.coords.heading) && (p.coords.speed || 0) > 0.8) { gpsHeading = p.coords.heading; gpsHeadAt = performance.now(); }
+    /* když telefon směr nehlásí, spočítá se z posledních poloh (chůze nebo jízda) */
+    if (!lastFix) lastFix = pos;
+    else if (dist(lastFix, pos) > Math.max(5, acc * 0.6)) { trackHeading = bearing(lastFix, pos); trackAt = performance.now(); lastFix = pos; }
     if (state === "locating") {
       msg.textContent = "Hledám tě… přesnost " + Math.round(acc) + " m. Chvilku počkej.";
       if (acc <= (mode === "car" ? 40 : 25) || performance.now() - t0Loc > 12000) startGame(pos);
@@ -1225,7 +1238,7 @@
     if (best) {
       var d = best.d, ang = bearing(pos, best.g) - (hd.h === null ? 0 : hd.h);
       sayDirection(hd.h === null ? null : ang, d);
-      northEl.style.opacity = hd.h === null ? "1" : "0.4";
+      northEl.style.opacity = "1";
       tgt = clamp(10 * (1 - (d - catchR() * 0.4) / (M.bands[2] * 1.15)), 0, 10);
       valueEl.innerHTML = fmtD(d);
       var nowp = performance.now();
@@ -1270,7 +1283,15 @@
     level += (tgt - level) * 0.08;
     for (var i = 0; i < bars.length; i++) bars[i].classList.toggle("on", state === "play" && level >= i + 0.5);
     if (state === "play" || state === "pick") timeEl.textContent = mmss((Date.now() - startedAt) / 1000);
-    drawMap(hd.h === null ? 0 : hd.h); drawCandles(); drawGauge();
+    drawMap(hd.h === null ? 0 : hd.h); drawRose(hd.h === null ? 0 : hd.h); drawCandles(); drawGauge();
+  }
+  /* růžice: otáčí se plynule po nejkratší cestě (bez přeskoku 359° -> 0°) */
+  var roseEl = document.getElementById("rose"), shownRose = 0;
+  function drawRose(h) {
+    var d = ((-h - shownRose) % 360 + 540) % 360 - 180;
+    shownRose += d * 0.25;
+    roseEl.style.transform = "rotate(" + shownRose.toFixed(1) + "deg)";
+    northEl.style.transform = "translateX(-50%) rotate(" + (-shownRose).toFixed(1) + "deg)";
   }
   /* Hlasové pokyny ke směru (jen s kompasem) */
   var lastDir = "", lastDirAt = 0;
