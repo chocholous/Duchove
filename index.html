@@ -859,23 +859,86 @@
   /* ---------- OpenStreetMap: cesty v okolí a mapa na radaru ---------- */
   var OVERPASS = ["https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
   /* stáhne cesty (highway) v okruhu; zkouší víc serverů, každý nejvýš 7 s */
-  function osmWays(lat, lon, radius, re) {
-    var q = "[out:json][timeout:8];way(around:" + Math.round(radius) + "," + lat.toFixed(6) + "," + lon.toFixed(6) + ")[highway~\"" + re + "\"];out tags geom;";
+  /* dotaz na Overpass; zkouší servery po řadě, každý nejvýš 7 s; vrací prvky (elements) */
+  function overpass(q) {
     var i = 0;
     function attempt() {
       if (i >= OVERPASS.length) return Promise.reject(new Error("overpass"));
       var url = OVERPASS[i++] + "?data=" + encodeURIComponent(q), ac = window.AbortController ? new AbortController() : null;
       var tm = setTimeout(function () { if (ac) ac.abort(); }, 7000);
       return fetch(url, ac ? { signal: ac.signal } : {}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-        .then(function (d) {
-          clearTimeout(tm);
-          return (d.elements || []).filter(function (e) { return e.geometry && e.geometry.length > 1; })
-            .map(function (e) { var t = e.tags || {}; return { hw: t.highway || "", foot: t.foot, fw: t.footway, nm: t.ref || t.name || "",
-              ow: t.oneway === "yes" || t.oneway === "1" || t.junction === "roundabout" || t.highway === "motorway" ? 1 : t.oneway === "-1" ? -1 : 0, pts: e.geometry.map(function (g) { return { lat: g.lat, lon: g.lon }; }) }; });
-        })
+        .then(function (d) { clearTimeout(tm); return d.elements || []; })
         .catch(function () { clearTimeout(tm); return attempt(); });
     }
     return attempt();
+  }
+  function geomPts(g) { return g.map(function (x) { return { lat: x.lat, lon: x.lon }; }); }
+  function wayInfo(e) {
+    var t = e.tags || {};
+    return { hw: t.highway || "", foot: t.foot, fw: t.footway, nm: t.ref || t.name || "",
+      ow: t.oneway === "yes" || t.oneway === "1" || t.junction === "roundabout" || t.highway === "motorway" ? 1 : t.oneway === "-1" ? -1 : 0,
+      acc: t.access, indoor: t.indoor, tn: t.tunnel, br: t.bridge, cov: t.covered, pts: geomPts(e.geometry) };
+  }
+  function osmWays(lat, lon, radius, re) {
+    var q = "[out:json][timeout:8];way(around:" + Math.round(radius) + "," + lat.toFixed(6) + "," + lon.toFixed(6) + ")[highway~\"" + re + "\"];out tags geom;";
+    return overpass(q).then(function (els) {
+      return els.filter(function (e) { return e.geometry && e.geometry.length > 1; }).map(wayInfo);
+    });
+  }
+  /* Pěšky: cesty a k tomu všechno, kde strašidlo být nesmí: budovy, voda a řeky, koleje, staveniště, vojenské a jiné uzavřené plochy */
+  function osmWalkArea(o) {
+    var c = o.lat.toFixed(6) + "," + o.lon.toFixed(6), A = function (r) { return "(around:" + r + "," + c + ")"; };
+    var q = "[out:json][timeout:10];(" +
+      "way" + A(75) + "[highway~\"" + FOOT_RE + "\"];" +
+      "way" + A(90) + "[building];" +
+      "way" + A(130) + "[natural=water];relation" + A(130) + "[natural=water];" +
+      "way" + A(130) + "[waterway];" +
+      "way" + A(110) + "[landuse~\"^(railway|construction|military|landfill|quarry|brownfield)$\"];" +
+      "way" + A(100) + "[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
+      "way" + A(90) + "[leisure=swimming_pool];way" + A(90) + "[amenity=swimming_pool];" +
+      ");out tags geom;";
+    return overpass(q).then(function (els) {
+      var ways = [], polys = [], lines = [];
+      els.forEach(function (e) {
+        var t = e.tags || {};
+        if (e.type === "way" && e.geometry && e.geometry.length > 1) {
+          if (t.highway) { ways.push(wayInfo(e)); return; }
+          var pts = geomPts(e.geometry);
+          if (t.waterway) {
+            if (closedRing(pts)) polys.push(pts);
+            lines.push({ pts: pts, buf: t.waterway === "river" ? 14 : t.waterway === "canal" ? 8 : t.waterway === "riverbank" ? 3 : 4 });
+            return;
+          }
+          if (t.railway) { lines.push({ pts: pts, buf: 8 }); return; }
+          if (closedRing(pts)) polys.push(pts);
+          lines.push({ pts: pts, buf: t.building ? 1.5 : 3 }); /* odstup od zdí a břehů */
+        } else if (e.type === "relation" && e.members) {
+          e.members.forEach(function (m) {
+            if (m.role === "inner" || !m.geometry || m.geometry.length < 2) return;
+            var pts = geomPts(m.geometry);
+            if (closedRing(pts)) polys.push(pts);
+            lines.push({ pts: pts, buf: 3 });
+          });
+        }
+      });
+      return { ways: ways, polys: polys, lines: lines };
+    });
+  }
+  function closedRing(pts) { var a = pts[0], b = pts[pts.length - 1]; return pts.length > 3 && a.lat === b.lat && a.lon === b.lon; }
+  function inPoly(p, poly) {
+    var c = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var a = poly[i], b = poly[j];
+      if ((a.lat > p.lat) !== (b.lat > p.lat) && p.lon < (b.lon - a.lon) * (p.lat - a.lat) / (b.lat - a.lat) + a.lon) c = !c;
+    }
+    return c;
+  }
+  /* je bod uvnitř budovy, ve vodě, na kolejích nebo jinde, kam se nesmí? */
+  function blockedAt(p, area) {
+    if (!area) return false;
+    for (var i = 0; i < area.polys.length; i++) if (inPoly(p, area.polys[i])) return true;
+    for (var k = 0; k < area.lines.length; k++) { var L = area.lines[k], s = snapToWays(p, [L]); if (s && s.d < L.buf) return true; }
+    return false;
   }
   /* chodníky a pěšiny mají přednost, klidné ulice jsou záloha; velké silnice nikdy */
   /* stahujeme i velké silnice, ale jen proto, abychom se jim vyhnuli */
@@ -884,12 +947,16 @@
   var ROAD_RE = "^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$";
   function footPref(w) {
     if (w.foot === "no" || w.fw === "crossing" || DANGER.test(w.hw)) return 0;
+    /* nepřístupné nebo ne venku: soukromé, uvnitř budov, průchody a podchody, mosty (ne nad řekou) */
+    if (/^(private|no|customers|delivery|agricultural|forestry)$/.test(w.acc || "") && !/^(yes|designated|permissive)$/.test(w.foot || "")) return 0;
+    if (w.hw === "corridor" || w.hw === "elevator" || (w.indoor && w.indoor !== "no")) return 0;
+    if ((w.tn && w.tn !== "no") || (w.cov && w.cov !== "no") || (w.br && w.br !== "no")) return 0;
     if (/^(footway|path|pedestrian|living_street|track|cycleway|bridleway)$/.test(w.hw)) return 1;
     if (/^(residential|service|unclassified)$/.test(w.hw)) return 2;
     return 0;
   }
   /* body každé 3 m podél cest, jen v daném rozmezí vzdálenosti od startu */
-  function samplePaths(o, ways, rMin, rMax) {
+  function samplePaths(o, ways, rMin, rMax, area) {
     var out = [], danger = ways.filter(function (w) { return DANGER.test(w.hw); });
     ways.forEach(function (w) {
       var pref = footPref(w); if (!pref) return;
@@ -897,15 +964,16 @@
         var a = w.pts[k - 1], b = w.pts[k], L = dist(a, b), steps = Math.max(1, Math.floor(L / 3));
         for (var s = 0; s <= steps; s++) {
           var t = s / steps, p = { lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t }, d = dist(o, p);
-          if (d >= rMin && d <= rMax && !(danger.length && (snapToWays(p, danger) || { d: 99 }).d < 8)) out.push({ lat: p.lat, lon: p.lon, d: d, b: bearing(o, p), pref: pref });
+          if (d >= rMin && d <= rMax && !(danger.length && (snapToWays(p, danger) || { d: 99 }).d < 8) && !blockedAt(p, area)) out.push({ lat: p.lat, lon: p.lon, d: d, b: bearing(o, p), pref: pref });
         }
       }
     });
     return out;
   }
   /* rozmístí n strašidel na cesty: každé v jiném směru, co nejvíc od sebe */
-  function placeOnPaths(o, ways, n) {
-    var pts = samplePaths(o, ways, 15, 50);
+  function placeOnPaths(o, ways, n, area) {
+    var pts = samplePaths(o, ways, 15, 50, area);
+    if (pts.length < n * 3) pts = samplePaths(o, ways, 10, 70, area); /* málo míst: zkusit kousek dál */
     if (pts.length < n) return null;
     var base = rnd(0, 360), chosen = [];
     for (var i = 0; i < n; i++) {
@@ -1166,16 +1234,32 @@
     state = "boot"; radar.classList.add("boot"); powerUp();
     sayEl.textContent = "Kalibruji detektor…"; speak("Kalibruji detektor.", true);
     var gen = ++bootGen, mine = ghosts;
+    /* pěšky strašidla smějí jen na chodníky a cesty venku; bez mapy okolí se nehraje (kromě zkoušky doma) */
+    var loadArea = function () {
+      return Promise.race([osmWalkArea(origin).catch(function () { return null; }), new Promise(function (r) { setTimeout(function () { r(null); }, 22000); })]);
+    };
+    var mapFail = false;
     var placing = mode === "walk" && !savedGame
-      ? Promise.race([osmWays(o.lat, o.lon, 75, FOOT_RE).then(function (ws) { pathPts = samplePaths(o, ws, 12, 55); return placeOnPaths(o, ws, N); }).catch(function () { return null; }),
-                      new Promise(function (r) { setTimeout(function () { r(null); }, 9000); })])
+      ? loadArea().then(function (area) {
+          if (!area) return null;
+          pathPts = samplePaths(o, area.ways, 12, 55, area);
+          return placeOnPaths(o, area.ways, N, area);
+        })
       : Promise.resolve(null);
+    if (mode === "walk" && savedGame) loadArea().then(function (area) { if (area && gen === bootGen) pathPts = samplePaths(origin, area.ways, 12, 55, area); });
+    setTimeout(function () { if (gen === bootGen && state === "boot" && mode === "walk") sayEl.textContent = "Hledám místa venku, kam se strašidla mohla schovat…"; }, 4000);
     Promise.all([placing.then(function (pts) {
-      if (gen !== bootGen || ghosts !== mine || !pts) return;
+      if (gen !== bootGen || ghosts !== mine) return;
+      if (!pts) { if (mode === "walk" && !savedGame && !test) mapFail = true; return; }
       pts.forEach(function (p, k) { ghosts[k].lat = p.lat; ghosts[k].lon = p.lon; });
       save();
     }), new Promise(function (r) { setTimeout(r, 2800); })]).then(function () {
       if (gen !== bootGen || state !== "boot") return;
+      if (mapFail) {
+        clearSave(); toIntro();
+        var m = "Nepodařilo se načíst mapu okolí. Bez ní nevím, kde je bezpečně venku, tak strašidla neschovám. Zkus to za chvilku znovu.";
+        msg.textContent = m; speak(m, true); return;
+      }
       radar.classList.remove("boot"); ambience(true);
       var pre = savedGame ? "Pokračujeme. " : "";
       if (target !== null) { chooseTarget(target, pre); return; }
@@ -1231,11 +1315,18 @@
       }
     });
     if (!start) return null;
-    var cur = start.p, b = start.b, a = start.a, w = start.w, left = want, seen = {};
-    for (var guard = 0; guard < 600; guard++) {
+    /* projde silnici dopředu až na ROUTE_MAX metrů a zapamatuje si ji (path) i s mosty a tunely */
+    var cur = start.p, b = start.b, a = start.a, w = start.w, s = 0, seen = {};
+    var path = [{ lat: cur.lat, lon: cur.lon, s: 0, br: false, tn: false }];
+    var flag = function (x, k) { return !!(x[k] && x[k] !== "no"); };
+    for (var guard = 0; guard < 900; guard++) {
       var L = dist(cur, b);
-      if (L >= left) { var t = left / L; return { lat: cur.lat + (b.lat - cur.lat) * t, lon: cur.lon + (b.lon - cur.lon) * t, along: want }; }
-      left -= L;
+      if (s + L >= ROUTE_MAX) {
+        var tt = (ROUTE_MAX - s) / L;
+        path.push({ lat: cur.lat + (b.lat - cur.lat) * tt, lon: cur.lon + (b.lon - cur.lon) * tt, s: ROUTE_MAX, br: flag(w, "br"), tn: flag(w, "tn") });
+        break;
+      }
+      s += L; path.push({ lat: b.lat, lon: b.lon, s: s, br: flag(w, "br"), tn: flag(w, "tn") });
       var inB = bearing(a, b), next = null, kb = nodeKey(b);
       seen[kb] = true;
       (adj[kb] || []).forEach(function (e) {
@@ -1247,10 +1338,272 @@
         var score = same ? turn * 0.3 : turn + 35 + Math.max(0, roadRank(w.hw) - roadRank(e.w.hw)) * 20;
         if (!next || score < next.score) next = { score: score, e: e };
       });
-      if (!next) return want - left > 600 ? { lat: b.lat, lon: b.lon, along: want - left } : null; /* slepá ulice */
+      if (!next) break; /* slepá ulice */
       cur = b; a = next.e.a; b = next.e.b; w = next.e.w;
     }
+    var end = path[path.length - 1].s;
+    if (end < 600) return null;
+    var at = pointAt(path, Math.min(want, end));
+    return { lat: at.lat, lon: at.lon, along: Math.min(want, end), path: path };
+  }
+  var ROUTE_MAX = 2300;
+  function pointAt(path, s) {
+    for (var k = 1; k < path.length; k++) {
+      if (path[k].s >= s) {
+        var a = path[k - 1], b = path[k], t = b.s > a.s ? (s - a.s) / (b.s - a.s) : 0;
+        return { lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t };
+      }
+    }
+    return path[path.length - 1];
+  }
+
+  /* ---------- Auto: strašidla u skutečných míst podél cesty ----------
+     Podél silnice před námi (1 až 2,2 km) se hledá hřbitov, kostel, kaplička, Boží muka, hrad, zřícenina, mlýn,
+     rybník, pomník, les, nebo most či tunel na naší silnici. Strašidlo se posadí na silnici přímo u toho místa
+     a hlas řekne, na které straně ho vyhlížet. */
+  var PLACE = {
+    cemetery: { at: "u hřbitova", look: "hřbitov", pr: 10, lat: 220 },
+    castle: { at: "u hradu", look: "hrad nebo zámek", pr: 9, lat: 350 },
+    ruins: { at: "u zříceniny", look: "zříceninu", pr: 9, lat: 350 },
+    church: { at: "u kostela", look: "kostel", pr: 8, lat: 200 },
+    chapel: { at: "u kapličky", look: "kapličku", pr: 7, lat: 200 },
+    cross: { at: "u Božích muk", look: "křížek u cesty", pr: 7, lat: 80 },
+    windmill: { at: "u mlýna", look: "mlýn", pr: 7, lat: 250 },
+    pond: { at: "u rybníka", look: "rybník", pr: 6, lat: 150 },
+    bridge: { at: "na mostě", look: "most", pr: 6 },
+    tunnel: { at: "v tunelu", look: "tunel", pr: 6 },
+    memorial: { at: "u pomníku", look: "pomník", pr: 5, lat: 150 },
+    forest: { at: "u lesa", look: "les", pr: 3 },
+    road: { at: "u silnice", look: "", pr: 0 }
+  };
+  var PLACE_MIN = 1000, PLACE_MAX = 2200;
+  function placeKind(t) {
+    if (t.landuse === "cemetery" || t.amenity === "grave_yard") return "cemetery";
+    if (/^(wayside_cross|wayside_shrine)$/.test(t.historic || "") || t.man_made === "cross") return "cross";
+    if (t.historic === "ruins") return "ruins";
+    if (/^(castle|manor)$/.test(t.historic || "")) return "castle";
+    if (/^(windmill|watermill)$/.test(t.historic || "") || /^(windmill|watermill)$/.test(t.man_made || "")) return "windmill";
+    if (t.building === "chapel" || t.historic === "chapel") return "chapel";
+    if (t.amenity === "place_of_worship" || /^(church|cathedral)$/.test(t.building || "")) return "church";
+    if (/^(memorial|monument)$/.test(t.historic || "") && !/^(plaque|stolperstein|blue_plaque)$/.test(t.memorial || "")) return "memorial";
+    if (t.natural === "water") return "pond";
+    if (t.landuse === "forest" || t.natural === "wood") return "forest";
     return null;
+  }
+  function placesAlong(path) {
+    var line = path.filter(function (p, k) { return p.s >= PLACE_MIN - 250 && p.s <= PLACE_MAX + 100 && (k % 1 === 0); });
+    /* řidší lomená čára pro dotaz (bod zhruba každých 120 m) */
+    var poly = [], lastS = -1e9;
+    line.forEach(function (p) { if (p.s - lastS >= 120) { poly.push(p); lastS = p.s; } });
+    if (line.length && poly[poly.length - 1] !== line[line.length - 1]) poly.push(line[line.length - 1]);
+    if (poly.length < 2) return Promise.resolve([]);
+    var P = poly.map(function (p) { return p.lat.toFixed(5) + "," + p.lon.toFixed(5); }).join(",");
+    var A = function (r) { return "(around:" + r + "," + P + ")"; };
+    var q = "[out:json][timeout:12];(" +
+      "nwr" + A(220) + "[landuse=cemetery];nwr" + A(220) + "[amenity=grave_yard];" +
+      "nwr" + A(200) + "[amenity=place_of_worship];nwr" + A(200) + "[building~\"^(church|chapel|cathedral)$\"];" +
+      "nwr" + A(80) + "[historic~\"^(wayside_cross|wayside_shrine)$\"];node" + A(60) + "[man_made=cross];" +
+      "nwr" + A(350) + "[historic~\"^(castle|ruins|manor|chapel|windmill|watermill)$\"];" +
+      "nwr" + A(150) + "[historic~\"^(memorial|monument)$\"];" +
+      "nwr" + A(250) + "[man_made~\"^(windmill|watermill)$\"];" +
+      "nwr" + A(150) + "[natural=water][water~\"^(pond|lake|reservoir)$\"];" +
+      "way" + A(40) + "[landuse=forest];way" + A(40) + "[natural=wood];" +
+      ");out center tags;";
+    return overpass(q).then(function (els) {
+      var out = [];
+      els.forEach(function (e) {
+        var t = e.tags || {}, kind = placeKind(t), c = e.lat != null ? e : e.center;
+        if (!kind || !c) return;
+        /* nejbližší místo na naší silnici a strana (vlevo / vpravo) */
+        var best = null;
+        for (var k = 1; k < path.length; k++) {
+          var a = path[k - 1], b = path[k];
+          if (b.s < PLACE_MIN - 300 || a.s > PLACE_MAX + 300) continue;
+          var pr = projSeg({ lat: c.lat, lon: c.lon }, a, b);
+          if (!best || pr.d < best.d) {
+            var kx = 111320 * Math.cos(rad(a.lat)), dx = (b.lon - a.lon) * kx, dy = (b.lat - a.lat) * 111320, px = (c.lon - a.lon) * kx, py = (c.lat - a.lat) * 111320;
+            best = { d: pr.d, s: a.s + (b.s - a.s) * pr.t, side: dx * py - dy * px > 0 ? "vlevo" : "vpravo" };
+          }
+        }
+        /* jen co je z auta vidět: nejvýš tolik metrů od silnice, kolik snese daný druh (les hlídá už dotaz) */
+        if (!best || best.s < PLACE_MIN || best.s > PLACE_MAX || (PLACE[kind].lat && best.d > PLACE[kind].lat)) return;
+        out.push({ kind: kind, s: best.s, lateral: best.d, side: kind === "forest" ? "" : best.side, name: t.name || "" });
+      });
+      /* most a tunel na naší silnici */
+      ["br", "tn"].forEach(function (f) {
+        for (var k = 1; k < path.length; k++) if (path[k][f] && path[k].s >= PLACE_MIN && path[k - 1].s <= PLACE_MAX) {
+          out.push({ kind: f === "br" ? "bridge" : "tunnel", s: clamp(path[k - 1].s + 20, PLACE_MIN, PLACE_MAX), lateral: 0, side: "", name: "" }); break;
+        }
+      });
+      return out;
+    });
+  }
+  function pickPlace(list) {
+    if (!list.length) return null;
+    var top = Math.max.apply(null, list.map(function (p) { return PLACE[p.kind].pr; }));
+    var best = list.filter(function (p) { return PLACE[p.kind].pr === top; });
+    return best[Math.floor(Math.random() * best.length)];
+  }
+  /* Scény nálezu a závěry jízdy (napsal Opus): podle druhu místa, {jmeno}, {jmena}, {cas} */
+  var CAR_STORY = {
+    kinds: {
+      cemetery: {
+        names: ["Hřbitovní hlídač", "Strážce svíček", "Šedý zahradník"],
+        scenes: [
+          { title: "Hlídač u zdi", text: "{jmeno} sedí na staré zdi a počítá svíčky, aby žádná nezhasla. Dlouho ho nikdo neviděl. Dnes ano, a on se tiše usmál.", task: "Pošeptej mu, kolik svíček by mělo hořet, a tolik jich spočítej na prstech." },
+          { title: "Šepot v mlze", text: "Mezi náhrobky se válí mlha. {jmeno} v ní zalévá květiny, které vidí jen strašidla. Rostou všude tam, kde na někoho myslíme.", task: "Vzpomeň si potichu na někoho, koho máš rád, a pošeptej jeho jméno do dlaní." },
+          { title: "Lucerna ve tmě", text: "{jmeno} drží malou lucernu a svítí na cestu ztraceným ptákům. Když jsme projeli kolem, lucerna dvakrát zablikala. To byl pozdrav.", task: "Dvakrát pomalu mrkni do okna, tak se strašidlům odpovídá na pozdrav." }
+        ]
+      },
+      church: {
+        names: ["Kostelní šeptal", "Strážce zvonice", "Varhaník stínů"],
+        scenes: [
+          { title: "Ve věži", text: "Vysoko ve věži bydlí {jmeno}. Ve dne spí mezi zvony a v noci jim potichu ladí hlasy. Když jsme projeli, jeden zvon tiše cinkl.", task: "Zabruč potichu jako velký zvon, bim bam, jen jednou, ať se nevzbudí celá věž." },
+          { title: "Ztracený tón", text: "{jmeno} hledá jeden ztracený tón. Prý spadl z věže a zakutálel se někam do polí. Možná ho cestou uslyšíš.", task: "Zavři oči, chvilku poslouchej a pošeptej, jaký nejtišší zvuk jsi slyšel." },
+          { title: "Holubi na schodech", text: "Na kostelních schodech sedí {jmeno} a počítá holuby. Pokaždé mu vyjde jiné číslo, a tak počítá znovu a znovu.", task: "Spočítej všechny ptáky, které teď uvidíš z okna, a výsledek mu pošeptej." }
+        ]
+      },
+      chapel: {
+        names: ["Kapličkový poustevník", "Tichý poutník", "Strážce plamínku"],
+        scenes: [
+          { title: "Malé okénko", text: "V kapličce je malé okénko a za ním {jmeno}. Celé roky hlídá jeden plamínek, aby poutníci v noci trefili domů.", task: "Najdi venku nějaké světlo, třeba lampu nebo okno, a pošeptej, komu asi svítí." },
+          { title: "Kapsa plná kamínků", text: "{jmeno} si u kapličky odpočívá od dlouhé cesty. Má klobouk plný suchého listí a v kapse kamínek z každé vesnice.", task: "Vymysli, co by sis dal do kapsy z místa, kudy právě jedeme." },
+          { title: "Tiché přání", text: "Do kapličky se chodí šeptat přání. {jmeno} je všechna schovává do malé truhličky a nikdy je nikomu neprozradí.", task: "Pošeptej do dlaní jedno tajné přání a nikomu ho neříkej, ani mně." }
+        ]
+      },
+      cross: {
+        names: ["Strážce rozcestí", "Kamenný poutník", "Pocestný stín"],
+        scenes: [
+          { title: "Na rozcestí", text: "U křížku na kraji cesty stojí {jmeno} a ukazuje bloudícím správný směr. Nikdy se nesplete, jen mluví hrozně potichu.", task: "Podívej se z okna a zkus uhodnout, kam vede nejbližší odbočka, a pošeptej to." },
+          { title: "Kytička u kamene", text: "Někdo nechal u cesty malou kytičku. {jmeno} ji hlídá, aby ji vítr neodnesl. Je to jeho nejmilejší práce.", task: "Vymysli kytičku, jakou bys mu tam nechal ty, a pošeptej, jakou má barvu." },
+          { title: "Kámen pamatuje", text: "{jmeno} je starší než silnice, po které jedeme. Pamatuje koně, vozy a lidi s košíky. Rád by věděl, kam jedeme my.", task: "Pošeptej mu, kam jedeme a na co se tam nejvíc těšíš." }
+        ]
+      },
+      castle: {
+        names: ["Bílá paní", "Zámecká paní", "Paní s klíči"],
+        scenes: [
+          { title: "Postava v okně", text: "Ve vysokém okně se mihla {jmeno}. Celé noci chodí po chodbách a zhasíná svíčky, které už nikdo nepotřebuje.", task: "Spočítej okna na nejbližším domě, který uvidíš, a pošeptej jí to číslo." },
+          { title: "Klíček od věže", text: "{jmeno} ztratila klíček od nejvyšší věže. Hledá ho už sto let a vůbec se nezlobí. Říká, že hledání je napůl zábava.", task: "Vymysli, kam mohl klíček spadnout, a pošeptej jí jedno dobré místo." },
+          { title: "Hostina pro stíny", text: "Na zámku je dnes tichá hostina. {jmeno} prostírá pro stíny a pro sovy. Jedna židle zůstala volná, prý pro tebe.", task: "Pošeptej, co by sis na té hostině dal k jídlu." }
+        ]
+      },
+      ruins: {
+        names: ["Mechový rytíř", "Zbrojnoš ze zříceniny", "Strážce rozbité věže"],
+        scenes: [
+          { title: "Hradba bez hradu", text: "{jmeno} hlídá hradbu, i když hrad už dávno spadl. Nikdo mu neřekl, že může jít domů. A tak hlídá dál.", task: "Pošeptej mu: děkujeme, už si můžeš odpočinout." },
+          { title: "Zelený kožich", text: "Na zřícenině roste mech jako zelený kožich. {jmeno} se do něj v zimě schovává a poslouchá, co si vyprávějí kameny.", task: "Najdi z okna něco zeleného a pošeptej, co to je." },
+          { title: "Ozvěna", text: "{jmeno} umí jen jednu věc. Opakuje poslední slovo, které uslyší. Proto je na zříceninách vždycky taková ozvěna.", task: "Pošeptej jedno slovo a požádej sourozence nebo spolujezdce vpředu, ať ho tiše zopakuje." }
+        ]
+      },
+      windmill: {
+        names: ["Mlynářův stín", "Mlýnský skřítek", "Moučný dědeček"],
+        scenes: [
+          { title: "Bílé stopy", text: "{jmeno} je celý bílý od mouky. Kudy jde, tam zůstávají malé bílé stopičky. Ráno si je lidé pletou s jinovatkou.", task: "Najdi z okna něco bílého a pošeptej, co to je." },
+          { title: "Kolo se točí", text: "Mlýnské kolo se už dávno netočí. Ale v noci ho {jmeno} roztáčí jen tak pro radost a tiše si u toho prozpěvuje.", task: "Krouž pomalu prstem ve vzduchu jako mlýnské kolo a napočítej do deseti." },
+          { title: "Mlýnek na sny", text: "{jmeno} nemele obilí, ale sny. Velké sny mele na malé, aby se vešly i do dětských postýlek.", task: "Vymysli jeden sen, který by ti mohl dnes v noci umlít, a pošeptej ho." }
+        ]
+      },
+      pond: {
+        names: ["Rybniční vodník", "Mlžný rybář", "Strážce leknínů"],
+        scenes: [
+          { title: "Hrnečky pod hladinou", text: "{jmeno} schovává pod hladinou hrnečky. Nejsou v nich duše, ale odrazy měsíce, které nachytal za jasných nocí.", task: "Zkus z okna najít měsíc nebo aspoň jeden mrak a pošeptej mu, kde je." },
+          { title: "Kruhy na vodě", text: "Na hladině se udělaly malé kruhy. To {jmeno} vyplaval nahoru, aby se podíval, kdo jede kolem. Hned se zase schoval.", task: "Nakresli prstem do dlaně tři kruhy, každý o trochu větší než ten předchozí." },
+          { title: "Kabát, ze kterého kape", text: "{jmeno} má kabát, ze kterého pořád kape voda. Kape mu i z klobouku. Ale nikdy nemá rýmu, protože vodu má rád.", task: "Pošeptej mu, co se dělá, když je někomu zima." }
+        ]
+      },
+      bridge: {
+        names: ["Mostní hlídač", "Skřítek pod mostem", "Strážce zábradlí"],
+        scenes: [
+          { title: "Pod námi", text: "Pod mostem, který jsme právě přejeli, bydlí {jmeno}. Počítá auta, která jedou nahoře. Naše auto bylo dnes to nejzajímavější.", task: "Pošeptej mu, kolik aut podle tebe přes most přejede za jeden den." },
+          { title: "Mýtné", text: "{jmeno} vybírá za přejezd mostu mýtné. Nechce peníze, ale úsměvy. Kdo se usměje, smí jet dál.", task: "Usměj se co nejšířeji do okna, mýtné je zaplaceno." },
+          { title: "Na zábradlí", text: "{jmeno} sedí na zábradlí a houpe nohama. Rád poslouchá, o čem si lidé v autech povídají. Prý je to lepší než pohádky.", task: "Vymysli jednu krátkou pohádkovou větu a pošeptej mu ji." }
+        ]
+      },
+      tunnel: {
+        names: ["Tunelový šeptal", "Pán ozvěny", "Lampář z podzemí"],
+        scenes: [
+          { title: "Lampy jako korálky", text: "Celým tunelem svítí lampy jako korálky. Každou z nich ráno i večer zkontroluje {jmeno}. Žádnou nenechá zhasnout.", task: "Zkus odhadnout, kolik lamp v tunelu svítilo, a pošeptej své číslo." },
+          { title: "Jak vypadá slunce", text: "Uprostřed tunelu bydlí {jmeno}. Nikdy neviděl slunce, a tak se potichu ptá každého auta, jak vypadá.", task: "Pošeptej mu, jak vypadá slunce, ale použij jen tři slova." },
+          { title: "Šepot ve zdech", text: "Ve zdech tunelu se schovává {jmeno}. Neumí mluvit nahlas, jen šeptá. Proto v tunelu všechno zní tak zvláštně.", task: "Pošeptej mu nějaké hezké slovo, ať má ve tmě radost." }
+        ]
+      },
+      forest: {
+        names: ["Lesní mužíček", "Mechový dědeček", "Tichý hejkal"],
+        scenes: [
+          { title: "Mezi stromy", text: "Mezi stromy se mihl {jmeno}. Je malý jako šiška a vousy má z lišejníku. Zná jméno každého stromu u silnice.", task: "Vymysli jméno pro nejbližší strom za oknem a pošeptej ho." },
+          { title: "Kdo už nehouká", text: "{jmeno} kdysi v lese houkal na lidi. Pak zjistil, že je to hloupost, a teď jen tiše pohvizduje na kosy a drozdy.", task: "Zkus potichoučku zapískat jako malý ptáček, jen tak, aby to slyšelo strašidlo." },
+          { title: "Lesní pošta", text: "{jmeno} nosí lesní poštu. Dopisy píše na bukové listy a doručuje je veverkám, jezevcům a sovám.", task: "Vymysli, co by mohla veverka napsat sově, a pošeptej to." }
+        ]
+      },
+      memorial: {
+        names: ["Strážce vzpomínek", "Tichý pamětník", "Kamenný strážný"],
+        scenes: [
+          { title: "Kdo si pamatuje", text: "U pomníku stojí {jmeno}. Jeho úkol je nezapomenout. Pamatuje si jména, příběhy a každou kytičku, kterou sem někdo přinesl.", task: "Vzpomeň si na jednu hezkou věc, která se ti dnes stala, a pošeptej mu ji." },
+          { title: "Kniha jmen", text: "{jmeno} má tlustou knihu jmen. Každý večer z ní tiše čte, aby žádné jméno nezůstalo samo.", task: "Pošeptej mu své jméno, ať ho má v knize taky." },
+          { title: "Chvilka ticha", text: "U pomníku se drží ticho. {jmeno} má každou chvilku ticha rád, protože pak slyší, co mu šeptá vítr.", task: "Buď chvilku úplně potichu a v duchu napočítej do deseti." }
+        ]
+      },
+      road: {
+        names: ["Silniční poutník", "Šedý pocestný", "Strážce patníků"],
+        scenes: [
+          { title: "Z patníku na patník", text: "{jmeno} skáče z patníku na patník a závodí s auty. Chvíli s námi držel krok, pak se zadýchal a zamával.", task: "Spočítej z okna deset patníků nebo sloupků u silnice." },
+          { title: "Kufřík s mlhou", text: "{jmeno} putuje po krajnici s malým kufříkem. Co v něm nosí, nikdo neví. Prý tam má schovanou mlhu na horší časy.", task: "Vymysli, co by sis do kouzelného kufříku dal ty, a pošeptej to." },
+          { title: "Obláček za autem", text: "Kus cesty za námi letěl {jmeno} jako malý šedý obláček. Chtěl jen vidět, kam jedeme. Teď už ví, že jsme kamarádi.", task: "Pomalu mrkni jedním okem, to je tajný pozdrav pro strašidla." }
+        ]
+      }
+    },
+    finale: [
+      { title: "Svíčky hoří", text: "Ticho. Všech pět strašidel je nalezeno. {jmena}. Každé z nich dnes někdo uviděl, a tak už není samo. Za {cas} jsme projeli kus kraje plný tajemství. Svíčky hoří a cesta tiše pokračuje. Pošeptejte si, které strašidlo bylo vaše nejmilejší." },
+      { title: "Kniha lovců", text: "Lovci duchů si všechno zapisují do své knihy. Dnes v ní přibylo pět jmen. {jmena}. Lov trval {cas} a žádné strašidlo se nebálo, protože jste byli laskaví. Teď odpočívají v mlze a čekají na další jízdu. Pošeptejte jim všem dobrou noc." },
+      { title: "Pět světýlek", text: "Venku houstne šero a ve tmě svítí pět malých světýlek. To jsou {jmena}. Kus cesty nás doprovodí a pak se tiše vrátí na svá místa. Za {cas} jste je našli všechny. Vymyslete spolu, kde se s nimi potkáme příště." }
+    ]
+  };
+  /* jméno strašidla podle místa; stejné jméno se v jedné jízdě neopakuje */
+  function ghostName(kind) {
+    var K = CAR_STORY.kinds[kind] || CAR_STORY.kinds.road;
+    var used = ghosts.map(function (g) { return g.place && g.place.name0; });
+    var free = K.names.filter(function (n) { return used.indexOf(n) < 0; });
+    var list = free.length ? free : K.names;
+    return list[Math.floor(Math.random() * list.length)];
+  }
+  function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+  /* hlášky při blížení podle místa a strany */
+  function carPlaceText(p, band) {
+    var pl = PLACE[p.kind], side = p.side;
+    if (!pl || p.kind === "road") return null;
+    if (band === "strong") return ["Sílí to.", "Signál sílí. " + p.name0 + " je " + (side ? side + " " : "") + pl.at + " před námi."];
+    if (band === "close") return ["Velmi blízko.", side ? "Už je to blízko. Dívejte se " + side + ", " + pl.look + "!" : "Už je to blízko. " + cap(pl.at) + " je strašidlo!"];
+    if (band === "here") return ["Teď!", side ? "Teď! " + cap(side) + " " + pl.at + ". Ťukni na ruku!" : "Teď! " + cap(pl.at) + ". Ťukni na ruku!"];
+    return null;
+  }
+  function announcePlace(i) {
+    var g = ghosts[i];
+    if (!g || !g.place || state !== "play" || target !== i || !pos) return;
+    var t = placeLine(g, dist(pos, g));
+    sayEl.textContent = t; speak(t);
+  }
+  /* čas slovy pro závěr: „dvacet sedm minut“, „hodinu a pět minut“ */
+  function csCount(n, fem) {
+    var u = ["nula", fem ? "jednu" : "jeden", fem ? "dvě" : "dva", "tři", "čtyři", "pět", "šest", "sedm", "osm", "devět", "deset", "jedenáct", "dvanáct", "třináct", "čtrnáct", "patnáct", "šestnáct", "sedmnáct", "osmnáct", "devatenáct"];
+    var t = ["", "", "dvacet", "třicet", "čtyřicet", "padesát", "šedesát", "sedmdesát", "osmdesát", "devadesát"];
+    if (n < 20) return u[n];
+    return t[Math.floor(n / 10)] + (n % 10 ? " " + (n % 10 === 1 ? "jedna" : n % 10 === 2 ? "dva" : u[n % 10]) : "");
+  }
+  function csUnit(n, one, few, many) { return n === 1 ? one : n >= 2 && n <= 4 ? few : many; }
+  function timeWords(sec) {
+    var m = Math.max(1, Math.round(sec / 60)), h = Math.floor(m / 60), r = m % 60;
+    var mins = function (x) { return (x === 1 ? "jednu" : csCount(x, true)) + " " + csUnit(x, "minutu", "minuty", "minut"); };
+    if (!h) return mins(m);
+    var hs = h === 1 ? "hodinu" : csCount(h, true) + " " + csUnit(h, "hodinu", "hodiny", "hodin");
+    return r ? hs + " a " + mins(r) : hs;
+  }
+  function kmWords(d) { return d < 1250 ? "asi kilometr" : d < 1750 ? "asi kilometr a půl" : "asi dva kilometry"; }
+  function placeLine(g, d) {
+    var pl = PLACE[g.place.kind], side = g.place.side ? g.place.side + " " : "";
+    if (g.place.kind === "bridge" || g.place.kind === "tunnel")
+      return g.place.name0 + " čeká " + pl.at + " na naší silnici, " + kmWords(d) + " před námi. Až tam pojedeme, buďte připravení.";
+    if (g.place.kind === "road") return g.place.name0 + " čeká na silnici před námi, " + kmWords(d) + " daleko.";
+    return g.place.name0 + " sedí " + side + pl.at + ", " + kmWords(d) + " před námi. Kdo uvidí " + pl.look + " první?";
   }
   function spawnAhead(i) {
     var dir = travelHeading();
@@ -1264,13 +1617,26 @@
     /* hned náhradní bod rovně před autem; jakmile dorazí mapa, přesune se na naši silnici */
     var p = offset(from, want, dir);
     ghosts[i].lat = p.lat; ghosts[i].lon = p.lon; ghosts[i].onRoad = false;
+    ghosts[i].place = null; ghosts[i].place = { kind: "road", side: "", name: "", name0: ghostName("road") };
     spawnedAt = Date.now(); startD = dist(pos, ghosts[i]); minD = Infinity; hereUntil = 0; save();
-    var mid = offset(from, 800, dir);
-    osmWays(mid.lat, mid.lon, 1150, CAR_RE).then(function (ws) {
+    var mid = offset(from, 1100, dir), live = function () { return gen === spawnGen && target === i && !ghosts[i].caught; };
+    osmWays(mid.lat, mid.lon, 1350, CAR_RE).then(function (ws) {
       var q = alongRoad(from, dir, ws, want);
-      if (!q || gen !== spawnGen || target !== i || ghosts[i].caught) return;
+      if (!q || !live()) return;
       ghosts[i].lat = q.lat; ghosts[i].lon = q.lon; ghosts[i].onRoad = true;
       startD = dist(pos, ghosts[i]); minD = Infinity; save();
+      /* a teď skutečné místo podél silnice: hřbitov, kostel, mlýn… */
+      return placesAlong(q.path).then(function (list) {
+        if (!live()) return;
+        var pl = pickPlace(list);
+        if (pl) {
+          var at = pointAt(q.path, pl.s);
+          ghosts[i].lat = at.lat; ghosts[i].lon = at.lon;
+          ghosts[i].place = null; ghosts[i].place = { kind: pl.kind, side: pl.side, name: pl.name, name0: ghostName(pl.kind) };
+          startD = dist(pos, ghosts[i]); minD = Infinity; save();
+        }
+        announcePlace(i);
+      }, function () { if (live()) announcePlace(i); });
     }).catch(function () {});
     return true;
   }
@@ -1319,7 +1685,19 @@
     revealEl.hidden = false; restartAnims(revealEl);
     stageEl.innerHTML = eyesSVG(zom);
     $("#rname").textContent = "Nalezeno.";
-    var clue = clues[i] || anyClue(mode === "car" ? CLUE_CAR : CLUE_ANY);
+    var clue = clues[i] || anyClue(mode === "car" ? CLUE_CAR : CLUE_ANY), spoken = "Nalezeno. " + clue;
+    /* auto: scéna podle místa, u kterého strašidlo sedělo */
+    if (mode === "car") {
+      var gp = ghosts[i].place || { kind: "road", name0: "" }, K = CAR_STORY.kinds[gp.kind] || CAR_STORY.kinds.road;
+      /* scéna, která v téhle jízdě ještě nebyla */
+      var usedSc = ghosts.map(function (g) { return g.scene; }), freeSc = K.scenes.filter(function (x) { return usedSc.indexOf(x.title) < 0; });
+      var pool = freeSc.length ? freeSc : K.scenes, sc = pool[Math.floor(Math.random() * pool.length)], nm = gp.name0 || K.names[0];
+      ghosts[i].scene = sc.title; save();
+      if (!ghosts[i].place) ghosts[i].place = { kind: "road", side: "", name: "", name0: nm };
+      clue = sc.text.replace(/\{jmeno\}/g, nm) + " " + sc.task;
+      $("#rname").textContent = sc.title;
+      spoken = sc.title + ". " + clue;
+    }
     $("#rquote").textContent = clue;
     drawScore(); drawCandles();
     var left = ghosts.filter(function (g) { return !g.caught; }).length;
@@ -1328,7 +1706,7 @@
     if (zom) groan(c.hoo, 0.32, 0.35); else hoo(c.hoo, 0.22, 0.4);
     after(900, function () { whisper(0.16, 2.2); });
     after(1500, function () { bell(147, 0.14, 5); });
-    after(2300, function () { speak("Nalezeno. " + clue, true); });
+    after(2300, function () { speak(spoken, true); });
     vibe(zom ? [400, 120, 400] : [120, 90, 120]);
   }
   /* odložené zvuky a hlášky jedné obrazovky; při odchodu z ní se zruší */
@@ -1371,10 +1749,20 @@
     stageEl.innerHTML = '<div class="time">' + time + "</div>";
     $("#rname").textContent = "Ticho.";
     $("#rquote").textContent = NUM[N][1] + " Svíčky hoří.";
+    var fin = "Ticho. " + NUM[N][1] + " Tvůj čas je " + time + ".";
+    /* auto: závěr jízdy se jmény všech pěti strašidel */
+    if (mode === "car") {
+      var F = CAR_STORY.finale[Math.floor(Math.random() * CAR_STORY.finale.length)];
+      var names = ghosts.map(function (g) { return (g.place && g.place.name0) || "Silniční poutník"; });
+      var list = names.length > 1 ? names.slice(0, -1).join(", ") + " a " + names[names.length - 1] : names.join("");
+      var txt = F.text.replace(/\{jmena\}/g, list).replace(/\{cas\}/g, timeWords((finishedAt - startedAt) / 1000));
+      $("#rname").textContent = F.title; $("#rquote").textContent = txt;
+      fin = F.title + ". " + txt;
+    }
     drawScore();
     rnext.innerHTML = ICON_AGAIN; rnext.setAttribute("aria-label", "Nová hra"); rnext.title = "Nová hra"; rnext.onclick = toIntro;
     [0, 1, 2].forEach(function (k) { after(k * 1300, function () { bell([196, 165, 131][k], 0.13, 6); }); });
-    after(900, function () { speak("Ticho. " + NUM[N][1] + " Tvůj čas je " + time + ".", true); });
+    after(900, function () { speak(fin, true); });
     sayEl.textContent = "";
   }
   catchBtn.addEventListener("click", function () {
@@ -1417,10 +1805,11 @@
   }
   /* plaché strašidlo uteče na jiné místo u cesty, nejvýš třikrát */
   function flee(g) {
-    g.fleeAt = Date.now(); g.flees = (g.flees || 0) + 1;
+    /* utíká jen na ověřená místa venku u cest; když žádné není, zůstane */
     var cand = pathPts.filter(function (p) { var dg = dist(g, p); return dg > 18 && dg < 35 && dist(pos, p) > 18; });
-    var p = cand.length ? cand[Math.floor(Math.random() * cand.length)] : offset(g, rnd(22, 30), (bearing(pos, g) + rnd(-40, 40) + 360) % 360);
-    if (origin && dist(origin, p) > 65) p = offset(origin, rnd(20, 45), rnd(0, 360));
+    if (!cand.length) return;
+    g.fleeAt = Date.now(); g.flees = (g.flees || 0) + 1;
+    var p = cand[Math.floor(Math.random() * cand.length)];
     g.lat = p.lat; g.lon = p.lon; save();
     delete clues[target]; prefetchClue(target);
     lastBand = bandOf(dist(pos, g));
@@ -1595,6 +1984,7 @@
       if (band !== "here" && nowp < hereUntil) band = "here";
       var bt = (mode === "car" ? carText : bandText)[band];
       if (mode === "walk" && best.g.t && TYPE_TEXT[best.g.t][band]) bt = TYPE_TEXT[best.g.t][band];
+      if (mode === "car" && best.g.place) bt = carPlaceText(best.g.place, band) || bt;
       var fast = band === "here" && tooFastFor(best.g);
       if (fast) bt = ["Zpomal.", "Je tady, ale zpomal. Nesmí se splašit."];
       var bkey = band + (fast ? "!" : "");
