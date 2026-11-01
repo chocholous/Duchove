@@ -2484,6 +2484,110 @@
     });
   }
 
+  /* ---------- Strašidelné zvuky okolí ----------
+     Náhodně z různých stran: vrzání dveří, skřípání, kroky, řetězy, kapání, kvílení větru, bouchnutí dveří, hrací strojek.
+     Zdálky spíš vzdálené a tiché, u ducha častější a bližší. Všechno se syntetizuje, nic se nestahuje. */
+  function nz(t, dur, f, q, type, vol, pan, wet, f2) {
+    var src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = noiseBuf; src.loop = true; bp.type = type || "bandpass"; bp.frequency.setValueAtTime(f, t); bp.Q.value = q;
+    if (f2) bp.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.02, dur * 0.2)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp); bp.connect(g); route(g, wet, pan); src.start(t, Math.random()); src.stop(t + dur + 0.05);
+    return g;
+  }
+  /* vrzání: dřevo se tře o dřevo (rychlé drobné cvakání s měnící se rychlostí přes rezonanci) */
+  function creak(vol, pan, wet) {
+    var n = ctx.currentTime, dur = rnd(1.2, 2.4), o = ctx.createOscillator(), bp = ctx.createBiquadFilter(), bp2 = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = "sawtooth"; var r0 = rnd(28, 45);
+    o.frequency.setValueAtTime(r0, n); o.frequency.linearRampToValueAtTime(r0 * rnd(1.6, 2.6), n + dur * 0.5); o.frequency.linearRampToValueAtTime(r0 * rnd(0.7, 1.2), n + dur);
+    bp.type = "bandpass"; bp.frequency.value = rnd(650, 1100); bp.Q.value = 9; bp2.type = "bandpass"; bp2.frequency.value = rnd(1700, 2400); bp2.Q.value = 6;
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.15); g.gain.setValueAtTime(vol, n + dur * 0.8); g.gain.exponentialRampToValueAtTime(0.0001, n + dur);
+    o.connect(bp); o.connect(bp2); bp.connect(g); bp2.connect(g); route(g, wet, pan); o.start(n); o.stop(n + dur + 0.05);
+  }
+  /* skřípání: nehty nebo kov po kameni, pronikavé a nerovné */
+  function scrape(vol, pan, wet) {
+    var n = ctx.currentTime, dur = rnd(0.9, 1.6);
+    nz(n, dur, rnd(2600, 3400), 14, "bandpass", vol * 7, pan, wet, rnd(1800, 4200));
+    var o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain(), f = rnd(1900, 2900);
+    o.type = "triangle"; o.frequency.setValueAtTime(f, n); o.frequency.linearRampToValueAtTime(f * rnd(0.85, 1.2), n + dur);
+    lfo.frequency.value = rnd(11, 19); lg.gain.value = f * 0.02; lfo.connect(lg); lg.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol * 0.5, n + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, n + dur);
+    o.connect(g); route(g, wet, pan); o.start(n); lfo.start(n); o.stop(n + dur + 0.05); lfo.stop(n + dur + 0.05);
+  }
+  /* kroky: 4 až 6 šlápnutí ve štěrku, buď se blíží, nebo vzdalují */
+  function steps(vol, pan, wet) {
+    var n = ctx.currentTime, cnt = 4 + Math.floor(Math.random() * 3), gap = rnd(0.45, 0.62), closer = Math.random() < 0.6;
+    for (var j = 0; j < cnt; j++) {
+      var v = vol * (closer ? 0.35 + 0.65 * j / (cnt - 1) : 1 - 0.65 * j / (cnt - 1)), t = n + j * gap + rnd(-0.03, 0.03);
+      nz(t, 0.11, rnd(700, 1100), 1.2, "bandpass", v, pan + (closer ? -0.04 : 0.04) * j, wet);
+      nz(t + 0.01, 0.08, 180, 1, "lowpass", v * 0.7, pan, wet);
+    }
+  }
+  /* řetězy: kovové cinknutí, několikrát rychle po sobě */
+  function chains(vol, pan, wet) {
+    var n = ctx.currentTime, cnt = 5 + Math.floor(Math.random() * 6);
+    for (var j = 0; j < cnt; j++) {
+      var t = n + j * rnd(0.05, 0.16) + (j > cnt / 2 ? 0.25 : 0), f = rnd(2200, 3800), g = ctx.createGain(), v = vol * rnd(0.4, 1);
+      g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + rnd(0.15, 0.3));
+      [1, 2.32, 3.71].forEach(function (m, k) { var o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = f * m; og.gain.value = [1, 0.5, 0.25][k]; o.connect(og); og.connect(g); o.start(t); o.stop(t + 0.35); });
+      route(g, wet, pan);
+    }
+  }
+  /* kapání vody ve tmě */
+  function drip(vol, pan) {
+    var n = ctx.currentTime, cnt = 2 + Math.floor(Math.random() * 3);
+    for (var j = 0; j < cnt; j++) {
+      var t = n + j * rnd(0.6, 1.4), o = ctx.createOscillator(), g = ctx.createGain(), f = rnd(900, 1500);
+      o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.45, t + 0.06);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      o.connect(g); route(g, 0.9, pan); o.start(t); o.stop(t + 0.1);
+    }
+  }
+  /* kvílení větru: rezonance, která se pomalu zvedá a padá */
+  function howl(vol, pan) {
+    var n = ctx.currentTime, dur = rnd(3, 5), f = rnd(380, 600);
+    nz(n, dur, f, 18, "bandpass", vol * 9, pan, 0.6, f * rnd(1.3, 1.8));
+    nz(n + 0.3, dur - 0.3, f * 1.5, 14, "bandpass", vol * 6, -pan, 0.6, f * rnd(0.9, 1.2));
+  }
+  /* bouchnutí dveří někde daleko */
+  function slam(vol, pan) {
+    var n = ctx.currentTime;
+    nz(n, 0.5, 120, 0.8, "lowpass", vol * 1.6, pan, 0.95);
+    nz(n + 0.02, 0.18, 900, 1.5, "bandpass", vol * 0.6, pan, 0.95);
+  }
+  /* hrací strojek: pár rozladěných tónů, pomalu a tiše */
+  function musicBox(vol, pan) {
+    var n = ctx.currentTime, mel = [[1046, 0], [987, .5], [784, 1], [880, 1.5], [659, 2.2], [698, 2.7], [587, 3.4]], slow = rnd(1, 1.25);
+    mel.forEach(function (m) {
+      var t = n + m[1] * slow, o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o2.type = "sine"; o.frequency.value = m[0] * rnd(0.985, 1.0); o2.frequency.value = m[0] * 4.02;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      var g2 = ctx.createGain(); g2.gain.value = 0.15; o.connect(g); o2.connect(g2); g2.connect(g); route(g, 0.8, pan);
+      o.start(t); o2.start(t); o.stop(t + 1.25); o2.stop(t + 1.25);
+    });
+  }
+  var nextSpook = performance.now() + 8000, lastSpook = "";
+  function spook(name, k) {
+    if (!soundOn || !audio()) return;
+    var pan = rnd(-0.9, 0.9), near = 0.22 + 0.38 * k, far = 0.14 + 0.16 * k, wet = 0.8 - 0.45 * k;
+    ({ creak: function () { creak(near, pan, wet); }, scrape: function () { scrape(near, pan, wet); }, steps: function () { steps(near * 0.9, pan, wet); },
+       chains: function () { chains(near * 0.5, pan, wet); }, drip: function () { drip(far * 2, pan); }, howl: function () { howl(far, pan); },
+       slam: function () { slam(far * 3, pan); }, musicbox: function () { musicBox(far * 0.9, pan); } })[name]();
+  }
+  function spookLoop() {
+    var now = performance.now(), act = state === "play" || state === "pick";
+    if (act && now >= nextSpook && !(gcam)) {
+      var b = state === "play" ? nearest() : null, k = b ? clamp(level / 10, 0, 1) : 0.1;
+      /* blízko: vrzání, skřípání, kroky, řetězy; zdálky: kapání, vítr, bouchnutí, hrací strojek */
+      var pool = k > 0.5 ? ["creak", "scrape", "steps", "chains", "creak", "steps", "drip"] : k > 0.2 ? ["creak", "steps", "howl", "drip", "slam", "chains", "musicbox"] : ["howl", "drip", "slam", "musicbox", "creak"];
+      pool = pool.filter(function (x) { return x !== lastSpook; });
+      var name = pool[Math.floor(Math.random() * pool.length)]; lastSpook = name;
+      spook(name, k);
+      nextSpook = now + (k > 0.5 ? rnd(5000, 9000) : k > 0.2 ? rnd(8000, 14000) : rnd(12000, 22000));
+    }
+    setTimeout(spookLoop, 500);
+  }
+
   /* ---------- Napětí při přibližování ----------
      Pod pípáním a šumem roste hluboký dron a dech, blízko se ozývá klepání, u ducha zazní mrazivý akord. */
   var tens = null;
@@ -3155,9 +3259,10 @@
     setTimeout(function () { snore(0.3); }, 9200);
     setTimeout(function () { groan(110, 0.3, 0.4); }, 12000);
     setTimeout(function () { bell(147, 0.15, 5); }, 14200);
-    setTimeout(function () { speak("Slyšíš mě? Zvuk funguje.", true); }, 15000);
+    setTimeout(function () { speak("Slyšíš mě? Zvuk funguje. A teď zvuky okolí.", true); }, 15000);
+    ["creak", "scrape", "steps", "chains", "drip", "howl", "slam", "musicbox"].forEach(function (nm, k) { setTimeout(function () { spook(nm, 0.8); }, 19000 + k * 3800); });
     var c = ctx ? ctx.state : "žádný";
-    msg.textContent = "Srdce, pípání, chrčení (když míříš správně, ztichne), úpění, skřek, kňourání, chrápání, sténání zombie, zvon a hlas. " +
+    msg.textContent = "Srdce, pípání, chrčení (když míříš správně, ztichne), úpění, skřek, kňourání, chrápání, sténání zombie, zvon a hlas. Pak zvuky okolí: vrzání, skřípání, kroky, řetězy, kapání, vítr, bouchnutí dveří a hrací strojek. " +
       (c !== "running" ? "Zvuk je zatím zablokovaný, ťukni znovu. " : "") +
       (!("speechSynthesis" in window) ? "Tenhle prohlížeč neumí mluvit. " : !csVoice ? "Telefon nemá český hlas. " : voiceScore(csVoice) < 4 ? "Hlas: " + csVoice.name + ". Lepší hlas stáhneš v nastavení telefonu. " : "Hlas: " + csVoice.name + ". ") +
       "Nic neslyšíš? Zesil hlasitost, na iPhonu vypni tichý režim.";
@@ -3214,7 +3319,7 @@
     }).catch(function () {});
   } catch (e) {}
 
-  frame(); callLoop(); heartLoop(); clickLoop(); vibeLoop(); beepLoop(); staticLoop(); tensionLoop();
+  frame(); callLoop(); heartLoop(); clickLoop(); vibeLoop(); beepLoop(); staticLoop(); tensionLoop(); spookLoop();
 })();
 </script>
 </body>
