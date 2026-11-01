@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Test mapy</title>
+<style>
+  :root { color-scheme: dark; --bg: #07090a; --fg: #e3e1d8; --dim: #8b938c; --ok: #8fd6a6; --bad: #e08a7a; --line: #2a302d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.45 system-ui, -apple-system, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  h1 { margin: 0 0 6px; font-size: 22px; }
+  p { margin: 0 0 12px; color: var(--dim); }
+  button { font: inherit; font-weight: 600; padding: 14px 18px; border-radius: 12px; border: 1px solid var(--line); background: #1a201d; color: var(--fg); margin: 0 8px 10px 0; }
+  button.primary { background: #2b4a3a; border-color: #3d6a53; }
+  pre { white-space: pre-wrap; word-break: break-word; font: 12.5px/1.45 ui-monospace, Menlo, monospace; background: #0e1211; border: 1px solid var(--line); border-radius: 10px; padding: 12px; user-select: text; -webkit-user-select: text; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<h1>Test mapy pro Lovce duchů</h1>
+<p>Stiskni Spustit test a povol polohu. Trvá to nejvýš minutu. Pak stiskni Kopírovat a výsledek pošli.</p>
+<button class="primary" id="run" type="button">Spustit test</button>
+<button id="copy" type="button">Kopírovat výsledek</button>
+<pre id="out">Zatím nic.</pre>
+<script>
+(function () {
+  var out = document.getElementById("out"), lines = [];
+  function log(t) { lines.push(t); out.textContent = lines.join("\n"); }
+  var SERVERS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+  function offset(p, d, b) { var br = b * Math.PI / 180; return { lat: p.lat + d * Math.cos(br) / 111320, lon: p.lon + d * Math.sin(br) / (111320 * Math.cos(p.lat * Math.PI / 180)) }; }
+  function bbox(o, r) { var sw = offset(offset(o, r, 180), r, 270), ne = offset(offset(o, r, 0), r, 90); return sw.lat.toFixed(6) + "," + sw.lon.toFixed(6) + "," + ne.lat.toFixed(6) + "," + ne.lon.toFixed(6); }
+  function queries(o) {
+    var bb = bbox(o, 110), c = o.lat.toFixed(6) + "," + o.lon.toFixed(6);
+    var re = "^(residential|living_street|pedestrian|unclassified|tertiary|secondary|footway|path|cycleway|track|steps)$";
+    return [
+      ["maly", "[out:json][timeout:10];node(around:40," + c + ");out ids 3;"],
+      ["hra", "[out:json][timeout:10][maxsize:8388608][bbox:" + bb + "];way[highway~\"" + re + "\"];out tags geom;"],
+      ["bez-limitu", "[out:json][timeout:25][bbox:" + bb + "];way[highway~\"" + re + "\"];out tags geom;"],
+      ["stara-verze", "[out:json][timeout:8];way(around:75," + c + ")[highway];out tags geom;"]
+    ];
+  }
+  function one(server, name, q) {
+    var t0 = performance.now(), ac = window.AbortController ? new AbortController() : null, tm = setTimeout(function () { if (ac) ac.abort(); }, 25000);
+    var host = server.split("/")[2];
+    return fetch(server + "?data=" + encodeURIComponent(q), ac ? { signal: ac.signal } : {})
+      .then(function (r) {
+        return r.text().then(function (txt) {
+          clearTimeout(tm);
+          var ms = Math.round(performance.now() - t0), info = host + " | " + name + " | HTTP " + r.status + " | " + ms + " ms | " + txt.length + " B";
+          try {
+            var d = JSON.parse(txt), n = (d.elements || []).length, named = (d.elements || []).filter(function (e) { return e.tags && e.tags.name; }).length;
+            var nulls = (d.elements || []).filter(function (e) { return (e.geometry || []).some(function (g) { return !g || typeof g.lat !== "number"; }); }).length;
+            info += " | prvků " + n + ", se jménem " + named + (nulls ? ", s prázdnými místy " + nulls : "") + (d.remark ? " | REMARK: " + d.remark.slice(0, 160) : "");
+            log((d.remark || !r.ok ? "✗ " : "✓ ") + info);
+          } catch (e) { log("✗ " + info + " | není JSON: " + txt.replace(/\s+/g, " ").slice(0, 160)); }
+        });
+      })
+      .catch(function (e) { clearTimeout(tm); log("✗ " + host + " | " + name + " | CHYBA " + (e && e.name) + ": " + (e && e.message) + " | " + Math.round(performance.now() - t0) + " ms"); });
+  }
+  document.getElementById("run").addEventListener("click", function () {
+    lines = []; log("Prohlížeč: " + navigator.userAgent);
+    log("Aplikace na ploše: " + ((window.matchMedia && matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) || navigator.standalone === true));
+    try { localStorage.setItem("__t", "x".repeat(500000)); localStorage.removeItem("__t"); log("Paměť stránky (500 kB): OK"); } catch (e) { log("Paměť stránky: CHYBA " + e.name); }
+    log("Zjišťuji polohu…");
+    var t0 = performance.now();
+    navigator.geolocation.getCurrentPosition(function (p) {
+      var o = { lat: p.coords.latitude, lon: p.coords.longitude };
+      log("Poloha za " + Math.round(performance.now() - t0) + " ms, přesnost " + Math.round(p.coords.accuracy) + " m (souřadnice zaokrouhlené: " + o.lat.toFixed(3) + ", " + o.lon.toFixed(3) + ")");
+      var qs = queries(o);
+      log("Ptám se serverů (každý nejvýš 25 s)…");
+      Promise.all(SERVERS.map(function (s) {
+        return qs.reduce(function (pr, q) { return pr.then(function () { return one(s, q[0], q[1]); }); }, Promise.resolve());
+      })).then(function () { log("Hotovo."); });
+    }, function (e) {
+      log("Poloha: CHYBA kód " + e.code + " (" + e.message + ") za " + Math.round(performance.now() - t0) + " ms");
+    }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  });
+  document.getElementById("copy").addEventListener("click", function () {
+    var t = out.textContent;
+    (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(t) : Promise.reject())
+      .then(function () { document.getElementById("copy").textContent = "Zkopírováno"; })
+      .catch(function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+  });
+})();
+</script>
+</body>
+</html>
