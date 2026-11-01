@@ -857,20 +857,37 @@
   var dots = [];
 
   /* ---------- OpenStreetMap: cesty v okolí a mapa na radaru ---------- */
-  var OVERPASS = ["https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+  var OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
   /* stáhne cesty (highway) v okruhu; zkouší víc serverů, každý nejvýš 7 s */
   /* dotaz na Overpass; zkouší servery po řadě, každý nejvýš 7 s; vrací prvky (elements) */
-  function overpass(q) {
-    var i = 0;
-    function attempt() {
-      if (i >= OVERPASS.length) return Promise.reject(new Error("overpass"));
-      var url = OVERPASS[i++] + "?data=" + encodeURIComponent(q), ac = window.AbortController ? new AbortController() : null;
-      var tm = setTimeout(function () { if (ac) ac.abort(); }, 7000);
-      return fetch(url, ac ? { signal: ac.signal } : {}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-        .then(function (d) { clearTimeout(tm); return d.elements || []; })
-        .catch(function () { clearTimeout(tm); return attempt(); });
-    }
-    return attempt();
+  /* Veřejné mapové servery bývají přetížené: první dva se zeptají naráz (vyhrává rychlejší),
+     když oba selžou, zkusí se zbylé po jednom. ms = jak dlouho čekat na jeden server. */
+  function fetchJSON(url, ms) {
+    var ac = window.AbortController ? new AbortController() : null, tm = setTimeout(function () { if (ac) ac.abort(); }, ms);
+    return fetch(url, ac ? { signal: ac.signal } : {}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        clearTimeout(tm);
+        /* server občas vrátí „úspěch“ s chybou uvnitř (vypršel čas, nedostatek paměti) */
+        if (d.remark && /error|timed out|out of memory/i.test(d.remark)) throw new Error(d.remark);
+        return d;
+      }, function (e) { clearTimeout(tm); throw e; });
+  }
+  function firstOf(ps) {
+    return new Promise(function (res, rej) {
+      var left = ps.length; if (!left) { rej(new Error("none")); return; }
+      ps.forEach(function (p) { p.then(res, function () { if (--left === 0) rej(new Error("all")); }); });
+    });
+  }
+  function overpass(q, ms) {
+    ms = ms || 9000;
+    var urls = OVERPASS.map(function (sv) { return sv + "?data=" + encodeURIComponent(q); });
+    return firstOf(urls.slice(0, 2).map(function (u) { return fetchJSON(u, ms); }))
+      .catch(function () {
+        var k = 2;
+        function next() { if (k >= urls.length) return Promise.reject(new Error("overpass")); return fetchJSON(urls[k++], ms).catch(next); }
+        return next();
+      })
+      .then(function (d) { return d.elements || []; });
   }
   function geomPts(g) { return g.map(function (x) { return { lat: x.lat, lon: x.lon }; }); }
   function wayInfo(e) {
@@ -886,9 +903,23 @@
     });
   }
   /* Pěšky: cesty a k tomu všechno, kde strašidlo být nesmí: budovy, voda a řeky, koleje, staveniště, vojenské a jiné uzavřené plochy */
+  /* naposledy načtená mapa okolí se pamatuje: na stejném místě hra začne hned a mapa poslouží i jako záloha */
+  var MAP_KEY = "lovci-duchu-mapa";
+  function cachedMap(o, maxAgeMs) {
+    try {
+      var m = JSON.parse(localStorage.getItem(MAP_KEY) || "null");
+      if (m && m.els && dist(m, o) < 35 && Date.now() - m.at < maxAgeMs) return m.els;
+    } catch (e) {}
+    return null;
+  }
   function osmWalkArea(o) {
+    var fresh = cachedMap(o, 14 * 86400000);
+    if (fresh) return Promise.resolve(parseWalkArea(o, fresh));
     var c = o.lat.toFixed(6) + "," + o.lon.toFixed(6), A = function (r) { return "(around:" + r + "," + c + ")"; };
-    var q = "[out:json][timeout:12];(" +
+    /* jen výřez kolem hráče (obrysy velkých ploch jako řeka se oříznou), ať je odpověď malá a rychlá */
+    var sw = offset(offset(o, 175, 180), 175, 270), ne = offset(offset(o, 175, 0), 175, 90);
+    var bb = sw.lat.toFixed(6) + "," + sw.lon.toFixed(6) + "," + ne.lat.toFixed(6) + "," + ne.lon.toFixed(6);
+    var q = "[out:json][timeout:25];(" +
       "way" + A(110) + "[highway];" +
       "way" + A(110) + "[building];relation" + A(110) + "[building];" +
       "way" + A(130) + "[natural=water];relation" + A(130) + "[natural=water];" +
@@ -899,8 +930,18 @@
       "way" + A(110) + "[leisure~\"^(garden|swimming_pool)$\"];" +
       "way" + A(100) + "[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
       "node" + A(110) + "[barrier~\"^(gate|lift_gate|swing_gate|sliding_gate|turnstile|full-height_turnstile)$\"];" +
-      ");out tags geom;";
-    return overpass(q).then(function (els) {
+      ");out tags geom(" + bb + ");";
+    return overpass(q, 25000).then(function (els) {
+      try { localStorage.setItem(MAP_KEY, JSON.stringify({ lat: o.lat, lon: o.lon, at: Date.now(), els: els })); } catch (e) {}
+      return parseWalkArea(o, els);
+    }, function (err) {
+      var old = cachedMap(o, 365 * 86400000); /* bez sítě: starší mapa téhož místa je lepší než nic */
+      if (old) return parseWalkArea(o, old);
+      throw err;
+    });
+  }
+  function parseWalkArea(o, els) {
+    {
       var ways = [], polys = [], lines = [], gates = {};
       els.forEach(function (e) {
         var t = e.tags || {};
@@ -935,7 +976,7 @@
       var area = { ways: ways, polys: polys, lines: lines };
       area.reach = reachable(o, ways, gates);
       return area;
-    });
+    }
   }
   /* poskládá uzavřené obrysy z kusů cest (konec jednoho = začátek dalšího) */
   function assembleRings(parts) {
@@ -985,7 +1026,7 @@
     ways.forEach(function (w) {
       if (!walkable(w)) return;
       for (var k = 1; k < w.pts.length; k++) {
-        if (projSeg(o, w.pts[k - 1], w.pts[k]).d > 60) continue;
+        if (projSeg(o, w.pts[k - 1], w.pts[k]).d > 120) continue; /* doma uvnitř bloku můžeš být od ulice dál */
         var r = find(nodeKey(w.pts[k - 1])), sz = size[r];
         if (!best || sz > best.sz) best = { r: r, sz: sz };
       }
@@ -1307,7 +1348,7 @@
     var gen = ++bootGen, mine = ghosts;
     /* pěšky strašidla smějí jen na chodníky a cesty venku; bez mapy okolí se nehraje (kromě zkoušky doma) */
     var loadArea = function () {
-      return Promise.race([osmWalkArea(origin).catch(function () { return null; }), new Promise(function (r) { setTimeout(function () { r(null); }, 22000); })]);
+      return Promise.race([osmWalkArea(origin).catch(function () { return null; }), new Promise(function (r) { setTimeout(function () { r(null); }, 60000); })]);
     };
     var mapFail = false, failWhy = "map";
     var placing = mode === "walk" && !savedGame
@@ -1320,6 +1361,7 @@
       : Promise.resolve(null);
     if (mode === "walk" && savedGame) loadArea().then(function (area) { if (area && gen === bootGen) pathPts = samplePaths(origin, area.ways, 12, 55, area); });
     setTimeout(function () { if (gen === bootGen && state === "boot" && mode === "walk") sayEl.textContent = "Hledám místa venku, kam se strašidla mohla schovat…"; }, 4000);
+    setTimeout(function () { if (gen === bootGen && state === "boot" && mode === "walk") { var t = "Mapa okolí se načítá pomalu. Ještě chvilku vydrž."; sayEl.textContent = t; speak(t); } }, 15000);
     Promise.all([placing.then(function (pts) {
       if (gen !== bootGen || ghosts !== mine) return;
       if (!pts) { if (mode === "walk" && !savedGame && !test) mapFail = true; return; }
@@ -1740,7 +1782,7 @@
     var b0 = nearest(); lastBand = b0 ? bandOf(b0.d) : "";
     lastDir = ""; nextCall = performance.now() + 3000;
     bell(98, 0.12, 4);
-    var t = prefix + (mode === "car" ? " Sleduj ducha a poslouchej." : "Jdi tiše za duchem. A poslouchej.");
+    var t = prefix + (mode === "car" ? " Sleduj ducha a poslouchej." : "Jdi tiše za duchem. Otáčej se s detektorem. Kde pípá nejvýš a duch je nejvíc slyšet, tím směrem je.");
     sayEl.textContent = t; speak(t, true);
   }
   /* Strašidlo se neukazuje. Jen oči ve tmě a zpráva, že je někde tady. */
@@ -2129,11 +2171,12 @@
     if (b && now >= nextCall && b.d > catchR()) {
       var k = clamp(1 - (b.d - catchR() * 0.4) / (M.bands[2] * 1.4), 0, 1), ch = CHARS[b.g.c];
       /* směr: ve sluchátkách se strašidlo ozve zleva nebo zprava, zezadu tišeji */
+      /* směr: když detektor míří na ducha, je slyšet nejvíc; bokem méně, zády nejméně (jde poznat i z reproduktoru) */
       var hd = curHeading(), pan = 0, vk = 1;
-      if (hd.h !== null) { var rel = rad(bearing(pos, b.g) - hd.h); pan = Math.sin(rel) * 0.9; if (Math.cos(rel) < -0.3) vk = 0.7; }
+      if (hd.h !== null) { var rel = rad(bearing(pos, b.g) - hd.h); pan = Math.sin(rel) * 0.9; vk = 0.25 + 0.75 * Math.pow((Math.cos(rel) + 1) / 2, 1.5); }
       if (ch.type === "zombie") groan(ch.hoo, (0.05 + 0.27 * k) * vk, 0.85 - 0.5 * k, pan); else hoo(ch.hoo, (0.04 + 0.22 * k) * vk, 0.85 - 0.5 * k, pan);
       if (Math.random() < 0.3 + 0.4 * k) setTimeout(function () { whisper((0.03 + 0.08 * k) * vk, 1.6, pan); }, 1400);
-      nextCall = now + 9000 - 5500 * k + rnd(-800, 800);
+      nextCall = now + 7000 - 5000 * k + rnd(-600, 600);
     }
     setTimeout(callLoop, 250);
   }
@@ -2154,6 +2197,24 @@
     if (rate > 0) { click(0.12 + 0.18 * Math.random()); kick = 3 + Math.random() * 4; }
     var next = rate > 0 ? Math.max(18, -Math.log(1 - Math.random()) / rate * 1000) : 250;
     setTimeout(clickLoop, next);
+  }
+  /* Pípání detektoru: čím blíž, tím rychlejší; čím víc detektor míří na ducha, tím vyšší tón */
+  function beep(f, vol) {
+    if (!soundOn || !audio()) return;
+    var n = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, n + 0.09);
+    o.connect(g); route(g, 0.05); o.start(n); o.stop(n + 0.1);
+  }
+  function aimAt(b) { var hd = curHeading(); return hd.h === null ? null : Math.cos(rad(bearing(pos, b.g) - hd.h)); }
+  function beepLoop() {
+    var next = 300, b = state === "play" ? nearest() : null;
+    if (b && b.d > catchR()) {
+      var k = clamp(level / 10, 0, 1), aim = aimAt(b), up = aim === null ? 0.5 : (aim + 1) / 2;
+      beep(560 + 640 * up * up + 180 * k, 0.05 + 0.1 * k);
+      next = Math.max(110, 1500 - 1350 * k);
+    } else if (b) { beep(1500, 0.13); next = 130; } /* je tady: rychlé vysoké pípání */
+    setTimeout(beepLoop, next);
   }
   /* zapnutí přístroje: stoupající tón */
   function powerUp() {
@@ -2260,12 +2321,13 @@
   $("#sndtest").addEventListener("click", function () {
     soundOn = true; voiceOn = true; setToggle($("#sound"), true); setToggle($("#voice"), true); unlock();
     thump(0.4); setTimeout(function () { thump(0.4); }, 900);
+    [0, 1, 2, 3, 4, 5].forEach(function (k) { setTimeout(function () { beep(600 + k * 120, 0.12); }, 1200 + k * 110); });
     setTimeout(function () { hoo(380, 0.25, 0.5); }, 1800);
     setTimeout(function () { groan(110, 0.3, 0.4); }, 4200);
     setTimeout(function () { bell(147, 0.15, 5); }, 6300);
     setTimeout(function () { speak("Slyšíš mě? Zvuk funguje.", true); }, 7000);
     var c = ctx ? ctx.state : "žádný";
-    msg.textContent = "Srdce, houkání, chrčení, zvon a hlas. " +
+    msg.textContent = "Srdce, pípání, houkání, chrčení, zvon a hlas. " +
       (c !== "running" ? "Zvuk je zatím zablokovaný, ťukni znovu. " : "") +
       (!("speechSynthesis" in window) ? "Tenhle prohlížeč neumí mluvit. " : !csVoice ? "Telefon nemá český hlas. " : voiceScore(csVoice) < 4 ? "Hlas: " + csVoice.name + ". Lepší hlas stáhneš v nastavení telefonu. " : "Hlas: " + csVoice.name + ". ") +
       "Nic neslyšíš? Zesil hlasitost, na iPhonu vypni tichý režim.";
@@ -2313,7 +2375,7 @@
 
   $("#introsettings").addEventListener("click", function () { openSheet(true); });
 
-  frame(); callLoop(); heartLoop(); clickLoop(); vibeLoop();
+  frame(); callLoop(); heartLoop(); clickLoop(); vibeLoop(); beepLoop();
 })();
 </script>
 </body>
