@@ -896,9 +896,10 @@
   function overpass(q, ms) {
     ms = ms || 9000;
     var urls = OVERPASS.map(function (sv) { return sv + "?data=" + encodeURIComponent(q); });
-    return firstOf(urls.slice(0, 2).map(function (u) { return fetchJSON(u, ms); }))
+    /* tři servery naráz, vyhrává první platná odpověď */
+    return firstOf(urls.slice(0, 3).map(function (u) { return fetchJSON(u, ms).then(function (d) { overpassHost = u.split("/")[2]; return d; }); }))
       .catch(function () {
-        var k = 2;
+        var k = 3;
         function next() { if (k >= urls.length) return Promise.reject(new Error("overpass")); return fetchJSON(urls[k++], ms).catch(next); }
         return next();
       })
@@ -920,38 +921,60 @@
   /* Pěšky: cesty a k tomu všechno, kde strašidlo být nesmí: budovy, voda a řeky, koleje, staveniště, vojenské a jiné uzavřené plochy */
   /* naposledy načtená mapa okolí se pamatuje: na stejném místě hra začne hned a mapa poslouží i jako záloha */
   var MAP_KEY = "lovci-duchu-mapa";
+  /* Zapamatovaná mapa: ukládá se jen to, co hra potřebuje (iPhone dovolí stránce uložit jen pár MB) */
+  var KEEP = ["highway", "foot", "footway", "access", "indoor", "tunnel", "bridge", "covered", "service", "building", "waterway", "railway",
+    "leisure", "natural", "landuse", "amenity", "barrier", "water", "oneway", "junction"];
+  var r6 = function (x) { return Math.round(x * 1e6) / 1e6; };
+  function packTags(t) { var o = {}; KEEP.forEach(function (k) { if (t && t[k] != null) o[k] = t[k]; }); return o; }
+  function packGeom(g) { var f = []; (g || []).forEach(function (x) { f.push(r6(x.lat), r6(x.lon)); }); return f; }
+  function unGeom(f) { var g = []; for (var i = 0; i + 1 < f.length; i += 2) g.push({ lat: f[i], lon: f[i + 1] }); return g; }
+  function packEls(els) {
+    return els.map(function (e) {
+      if (e.type === "node") return ["n", packTags(e.tags), [r6(e.lat), r6(e.lon)]];
+      if (e.type === "way") return ["w", packTags(e.tags), packGeom(e.geometry)];
+      return ["r", packTags(e.tags), (e.members || []).filter(function (m) { return m.type === "way" && m.geometry; }).map(function (m) { return [m.role || "", packGeom(m.geometry)]; })];
+    });
+  }
+  function unpackEls(pk) {
+    return pk.map(function (x) {
+      if (x[0] === "n") return { type: "node", tags: x[1], lat: x[2][0], lon: x[2][1] };
+      if (x[0] === "w") return { type: "way", tags: x[1], geometry: unGeom(x[2]) };
+      return { type: "relation", tags: x[1], members: x[2].map(function (m) { return { type: "way", role: m[0], geometry: unGeom(m[1]) }; }) };
+    });
+  }
   function cachedMap(o, maxAgeMs) {
     try {
       var m = JSON.parse(localStorage.getItem(MAP_KEY) || "null");
-      if (m && m.els && dist(m, o) < 35 && Date.now() - m.at < maxAgeMs) return m.els;
+      if (m && m.pk && dist(m, o) < 50 && Date.now() - m.at < maxAgeMs) return unpackEls(m.pk);
     } catch (e) {}
     return null;
   }
+  var mapInfo = null, overpassHost = "";
   function osmWalkArea(o) {
-    var fresh = cachedMap(o, 14 * 86400000);
-    if (fresh) return Promise.resolve(parseWalkArea(o, fresh));
-    var c = o.lat.toFixed(6) + "," + o.lon.toFixed(6), A = function (r) { return "(around:" + r + "," + c + ")"; };
-    /* jen výřez kolem hráče (obrysy velkých ploch jako řeka se oříznou), ať je odpověď malá a rychlá */
-    var sw = offset(offset(o, 110, 180), 110, 270), ne = offset(offset(o, 110, 0), 110, 90); /* stačí malý výřez: duchové jsou do 70 m */
+    var t0 = performance.now(), fresh = cachedMap(o, 14 * 86400000);
+    if (fresh) { mapInfo = { src: "z paměti", ms: performance.now() - t0 }; return Promise.resolve(parseWalkArea(o, fresh)); }
+    /* jen malý výřez kolem hráče (asi 220 × 220 m), obdélník je pro server rychlejší než kruh;
+       malé limity (čas, velikost) pustí dotaz na přetíženém serveru dřív na řadu */
+    var sw = offset(offset(o, 110, 180), 110, 270), ne = offset(offset(o, 110, 0), 110, 90);
     var bb = sw.lat.toFixed(6) + "," + sw.lon.toFixed(6) + "," + ne.lat.toFixed(6) + "," + ne.lon.toFixed(6);
-    var q = "[out:json][timeout:25];(" +
-      "way" + A(85) + "[highway];" +
-      "way" + A(85) + "[building];relation" + A(85) + "[building];" +
-      "way" + A(85) + "[natural=water];relation" + A(85) + "[natural=water];" +
-      "way" + A(85) + "[waterway];" +
-      "way" + A(85) + "[landuse~\"^(railway|construction|military|landfill|quarry|brownfield|allotments|farmyard|garages)$\"];" +
-      "relation" + A(85) + "[landuse~\"^(railway|construction|military|allotments|farmyard|garages)$\"];" +
-      "way" + A(85) + "[amenity~\"^(school|kindergarten|prison|swimming_pool)$\"];relation" + A(85) + "[amenity~\"^(school|kindergarten|prison)$\"];" +
-      "way" + A(85) + "[leisure~\"^(garden|swimming_pool)$\"];" +
-      "way" + A(85) + "[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
-      "node" + A(85) + "[barrier~\"^(gate|lift_gate|swing_gate|sliding_gate|turnstile|full-height_turnstile)$\"];" +
+    var q = "[out:json][timeout:10][maxsize:16777216][bbox:" + bb + "];(" +
+      "way[highway];way[building];relation[building];" +
+      "way[natural=water];relation[natural=water];way[waterway];" +
+      "way[landuse~\"^(railway|construction|military|landfill|quarry|brownfield|allotments|farmyard|garages)$\"];" +
+      "relation[landuse~\"^(railway|construction|military|allotments|farmyard|garages)$\"];" +
+      "way[amenity~\"^(school|kindergarten|prison|swimming_pool)$\"];relation[amenity~\"^(school|kindergarten|prison)$\"];" +
+      "way[leisure~\"^(garden|swimming_pool)$\"];" +
+      "way[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
+      "node[barrier~\"^(gate|lift_gate|swing_gate|sliding_gate|turnstile|full-height_turnstile)$\"];" +
       ");out tags geom(" + bb + ");";
-    return overpass(q, 25000).then(function (els) {
-      try { localStorage.setItem(MAP_KEY, JSON.stringify({ lat: o.lat, lon: o.lon, at: Date.now(), els: els })); } catch (e) {}
-      return parseWalkArea(o, els);
+    return overpass(q, 15000).then(function (els) {
+      var pk = packEls(els);
+      try { localStorage.setItem(MAP_KEY, JSON.stringify({ lat: o.lat, lon: o.lon, at: Date.now(), pk: pk })); } catch (e) {}
+      mapInfo = { src: overpassHost, ms: performance.now() - t0 };
+      return parseWalkArea(o, unpackEls(pk)); /* stejná data jako z paměti */
     }, function (err) {
       var old = cachedMap(o, 365 * 86400000); /* bez sítě: starší mapa téhož místa je lepší než nic */
-      if (old) return parseWalkArea(o, old);
+      if (old) { mapInfo = { src: "starší z paměti", ms: performance.now() - t0 }; return parseWalkArea(o, old); }
       throw err;
     });
   }
@@ -1052,7 +1075,7 @@
   /* Mapa okolí se stahuje jen jednou pro jedno místo: předem na úvodu, od prvního zaměření, a start hry ji převezme. */
   var mapJob = null;
   function areaFor(o) {
-    if (mapJob && dist(mapJob.o, o) < 35) return mapJob.p;
+    if (mapJob && dist(mapJob.o, o) < 50) return mapJob.p;
     var job = { o: o };
     job.p = osmWalkArea(o).catch(function () { return null; });
     job.p.then(function (a) { if (!a && mapJob === job) mapJob = null; }); /* nepovedlo se: příště zkusit znovu */
@@ -1332,7 +1355,7 @@
     else if (dist(lastFix, pos) > Math.max(5, acc * 0.6)) { trackHeading = bearing(lastFix, pos); trackAt = performance.now(); lastFix = pos; }
     if (state === "locating") {
       msg.textContent = "Hledám tě… přesnost " + Math.round(acc) + " m. Chvilku počkej.";
-      if (mode === "walk" && !resumeData && acc <= 150) areaFor(pos); /* mapa se stahuje, zatímco se poloha zpřesňuje */
+      if (mode === "walk" && !resumeData && acc <= 500) areaFor(pos); /* mapa se stahuje, zatímco se poloha zpřesňuje */
       if (acc <= (mode === "car" ? 60 : 40) || performance.now() - t0Loc > 6000) startGame(pos);
     }
   }
@@ -1369,7 +1392,7 @@
     lastBand = ""; shownCandles = ""; clues = {}; photos = []; buildDots(); drawCandles(); save(); wake(true);
     /* kalibrace po zapnutí, jako u skutečného přístroje; mezitím si stáhne cesty z OpenStreetMap
        a strašidla posadí na chodníky a pěšiny (když se to nepovede, zůstane náhodné rozmístění) */
-    state = "boot"; radar.classList.add("boot"); powerUp();
+    state = "boot"; bootAt = performance.now(); radar.classList.add("boot"); powerUp();
     sayEl.textContent = "Kalibruji detektor…"; speak("Kalibruji detektor.", true);
     var gen = ++bootGen, mine = ghosts;
     /* pěšky strašidla smějí jen na chodníky a cesty venku; bez mapy okolí se nehraje (kromě zkoušky doma) */
@@ -1411,7 +1434,7 @@
       else showPick(pre || "Tři strašidla se ukryla kolem tebe, u cest. ");
     });
   }
-  var bootGen = 0;
+  var bootGen = 0, bootAt = 0;
   function makeCarGhosts() {
     var pool = [0, 1, 2, 3, 4];
     for (var k = pool.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)), x = pool[k]; pool[k] = pool[j]; pool[j] = x; }
@@ -2257,7 +2280,10 @@
       hintEl.textContent = "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") + (mode === "walk" && far > 120 ? " · jsi daleko od startu, vrať se" : "");
     } else if (state === "pick") {
       valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Vyber ducha."; stateEl.className = "state"; catchBtn.disabled = true;
-      hintEl.textContent = pos ? "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") : "";
+      hintEl.textContent = (pos ? "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") : "") +
+        (mapInfo && mode === "walk" ? " · mapa " + mapInfo.src + " " + (mapInfo.ms / 1000).toFixed(1).replace(".", ",") + " s" : "");
+    } else if (state === "boot") {
+      hintEl.textContent = "kalibrace " + Math.floor((performance.now() - bootAt) / 1000) + " s" + (mode === "walk" ? (mapInfo ? " · mapa " + mapInfo.src : " · čekám na mapu okolí") : "");
     } else if (state === "intro") {
       valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = ""; stateEl.className = "state"; hintEl.textContent = "";
     }
