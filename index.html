@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#050706">
+<meta name="theme-color" content="#040605">
 <meta name="claude:viewport-fit-sides" content="cover">
 <title>Lovci duchů</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,23 +14,36 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&family=Barlow+Condensed:wght@500;600&display=swap">
 <style>
   /* Atmosféra: tma, mlha, zrno, tlumené barvy kosti a fosforu. Žádné emoji, žádné křiklavé barvy.
-     Layout: jedna obrazovka bez posouvání. Nahoře svíčky (kolik je nalezeno) a čas, uprostřed radar se světýlky,
-     pod ním vzdálenost a měřák, dole tlačítka jen s ikonami. */
+     Vzhled: telefon je skutečný přístroj. Tmavé pouzdro se šrouby a vyrytými popisky, kulatá obrazovka
+     radaru za sklem (fosfor, řádkování, odlesk), ručkový měřák za sklíčkem, číselné údaje v prosvícených
+     okénkách, stavové kontrolky, tlačítka jako fyzické klávesy.
+     Layout: jedna obrazovka bez posouvání. Nahoře svíčky, kontrolky a čas, uprostřed radar, pod ním měřák
+     a údaje, dole tlačítka jen s ikonami. */
   :root {
-    --bg: #050706;
+    --bg: #040605;
+    --case: #10140f;
+    --case-hi: #1b211d;
+    --case-lo: #080b0a;
     --panel: rgba(16, 20, 19, .72);
     --line: rgba(190, 205, 195, .14);
     --fg: #d8d6cb;
     --dim: #7f877f;
     --faint: #4a524c;
     --ghost: #b9d6c8;
+    --ghost-rgb: 185, 214, 200;
     --ember: #c9a46a;
+    --ember-rgb: 201, 164, 106;
     --blood: #a8443a;
+    --blood-rgb: 168, 68, 58;
+    --phosphor: #0b120e;
     --serif: "EB Garamond", "Iowan Old Style", Georgia, serif;
     --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    --label: "Barlow Condensed", "IBM Plex Mono", "Arial Narrow", sans-serif;
+    --key-shadow: inset 0 1px 0 rgba(216, 214, 203, .09), inset 0 -2px 0 rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(0, 0, 0, .5), 0 2px 3px rgba(0, 0, 0, .6);
+    --key-shadow-down: inset 0 2px 4px rgba(0, 0, 0, .75), inset 0 0 0 1px rgba(0, 0, 0, .6), 0 0 0 rgba(0, 0, 0, 0);
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
@@ -39,39 +52,66 @@
   body {
     background: var(--bg); color: var(--fg);
     font: 17px/1.5 var(--serif);
-    padding-block: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-bottom, 0px));
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: max(6px, env(safe-area-inset-top, 0px)) max(6px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(6px, env(safe-area-inset-left, 0px));
+    padding-right: max(6px, env(safe-area-inset-right, 0px));
     overflow: hidden; -webkit-tap-highlight-color: transparent;
   }
   :focus-visible { outline: 1px solid var(--ghost); outline-offset: 3px; }
   button { font-family: inherit; cursor: pointer; }
 
-  /* Mlha, zrno a vinětace přes celou obrazovku */
+  /* Mlha, zrno a vinětace přes celou obrazovku (bez filtrů, jen měkké přechody a posun) */
   .fx { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
   .fog { z-index: 1; overflow: hidden; }
   .fog::before, .fog::after {
     content: ""; position: absolute; inset: -40%;
     background:
-      radial-gradient(38% 26% at 30% 60%, rgba(150, 175, 165, .10), transparent 70%),
-      radial-gradient(30% 22% at 70% 35%, rgba(150, 175, 165, .08), transparent 70%),
-      radial-gradient(45% 30% at 55% 80%, rgba(120, 140, 135, .07), transparent 70%);
-    filter: blur(20px); animation: drift 48s ease-in-out infinite alternate;
+      radial-gradient(38% 26% at 30% 60%, rgba(150, 175, 165, .09), transparent 70%),
+      radial-gradient(30% 22% at 70% 35%, rgba(150, 175, 165, .07), transparent 70%),
+      radial-gradient(45% 30% at 55% 80%, rgba(120, 140, 135, .06), transparent 70%);
+    animation: drift 48s ease-in-out infinite alternate; will-change: transform;
   }
   .fog::after { animation-duration: 71s; animation-direction: alternate-reverse; opacity: .8; transform: scale(1.2); }
   @keyframes drift { from { transform: translate3d(-8%, 2%, 0) scale(1.1); } to { transform: translate3d(8%, -3%, 0) scale(1.25); } }
   .grain {
-    opacity: .09; mix-blend-mode: overlay;
+    opacity: .07; mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-    animation: grain .9s steps(4) infinite;
+    animation: grain 1.1s steps(4) infinite;
   }
   @keyframes grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-3%, 2%); } 50% { transform: translate(2%, -3%); } 75% { transform: translate(-2%, -1%); } 100% { transform: translate(0, 0); } }
-  .vignette { background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0, 0, 0, .75) 100%); }
+  .vignette { background: radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(0, 0, 0, .7) 100%); }
 
-  .app { position: relative; z-index: 2; height: 100%; max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 10px; }
+  /* Pouzdro přístroje */
+  .app {
+    position: relative; z-index: 2; height: 100%; max-width: 560px; margin-inline: auto;
+    display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 10px; border-radius: 22px;
+    background:
+      repeating-linear-gradient(90deg, rgba(216, 214, 203, .012) 0 1px, transparent 1px 3px),
+      linear-gradient(170deg, var(--case-hi) 0%, var(--case) 38%, var(--case-lo) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(216, 214, 203, .12), inset 0 -1px 0 rgba(0, 0, 0, .9), inset 0 0 0 1px rgba(0, 0, 0, .55),
+      inset 0 0 40px rgba(0, 0, 0, .35), 0 0 0 1px rgba(216, 214, 203, .06), 0 20px 60px rgba(0, 0, 0, .7);
+  }
+  .screw {
+    position: absolute; width: 9px; height: 9px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle at 35% 30%, #3a403c, #171b19 60%, #0a0c0b 100%);
+    box-shadow: inset 0 1px 1px rgba(216, 214, 203, .18), 0 1px 1px rgba(0, 0, 0, .9), 0 0 0 1px rgba(0, 0, 0, .55);
+  }
+  .screw::after { content: ""; position: absolute; left: 1.5px; right: 1.5px; top: 50%; height: 1px; margin-top: -.5px; background: rgba(0, 0, 0, .8); transform: rotate(var(--r, 28deg)); box-shadow: 0 1px 0 rgba(216, 214, 203, .08); }
+  .screw.tl { left: 7px; top: 7px; --r: 28deg; } .screw.tr { right: 7px; top: 7px; --r: -51deg; }
+  .screw.bl { left: 7px; bottom: 7px; --r: 73deg; } .screw.br { right: 7px; bottom: 7px; --r: -12deg; }
 
-  /* Hlavička: svíčky místo čísel, aby to pochopily i děti, které nečtou */
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+  /* Vyryté popisky a kontrolky */
+  .lbl { font: 500 9.5px/1 var(--label); letter-spacing: .18em; text-transform: uppercase; color: var(--faint); text-shadow: 0 1px 0 rgba(216, 214, 203, .06), 0 -1px 0 rgba(0, 0, 0, .8); white-space: nowrap; }
+  .lcd {
+    font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ghost);
+    background: linear-gradient(180deg, #050807, #080c0a 40%, #0a0f0c);
+    border-radius: 5px; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(0, 0, 0, .8), 0 1px 0 rgba(216, 214, 203, .07);
+    text-shadow: 0 0 6px rgba(var(--ghost-rgb), .45);
+  }
+
+  /* Hlavička: svíčky (kolik je nalezeno), kontrolky, čas */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding-inline: 8px; }
   .candles { display: flex; gap: 10px; align-items: flex-end; }
   .candle { width: 16px; height: 36px; display: block; }
   .candle .flame { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; transition: opacity .8s; }
@@ -79,140 +119,242 @@
   .candle.lit .halo { opacity: 1; }
   .candle .halo { opacity: 0; transition: opacity .8s; }
   @keyframes flicker { 0%, 100% { transform: scale(1, 1) rotate(0); } 20% { transform: scale(.94, 1.06) rotate(-2deg); } 45% { transform: scale(1.04, .95) rotate(1.5deg); } 70% { transform: scale(.97, 1.04) rotate(-1deg); } }
-  .timeleft { font: 400 15px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--dim); letter-spacing: .06em; }
-
-  /* Radar */
-  .stagebox { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; }
-  .radar {
-    position: relative; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh);
-    border-radius: 50%; overflow: hidden; border: 1px solid var(--line);
-    background:
-      repeating-radial-gradient(circle at center, transparent 0 19.6%, rgba(185, 214, 200, .07) 19.6% 20%),
-      radial-gradient(circle at center, #0b100e 0, #050706 72%);
-    box-shadow: inset 0 0 60px rgba(0, 0, 0, .9);
+  .plate { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .plate .model { font-size: 9px; letter-spacing: .26em; }
+  .leds { display: flex; gap: 14px; }
+  .led { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .led i {
+    width: 7px; height: 7px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #262b28, #141816 70%);
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, .9), 0 0 0 1.5px #060807, 0 1px 0 1.5px rgba(216, 214, 203, .07);
+    transition: background .4s, box-shadow .4s;
   }
-  .radar::before, .radar::after { content: ""; position: absolute; background: rgba(185, 214, 200, .06); }
-  .radar::before { left: 50%; top: 0; bottom: 0; width: 1px; }
-  .radar::after { top: 50%; left: 0; right: 0; height: 1px; }
+  .app:has(#radar:not(.off)) .led.pwr i { background: radial-gradient(circle at 40% 35%, #eaf7f0, var(--ghost) 70%); box-shadow: 0 0 7px rgba(var(--ghost-rgb), .8), 0 0 0 1.5px #060807; }
+  .app:has(#radar.boot) .led.cal i { background: radial-gradient(circle at 40% 35%, #f2dfb8, var(--ember) 70%); box-shadow: 0 0 7px rgba(var(--ember-rgb), .8), 0 0 0 1.5px #060807; animation: ledblink .5s steps(2) infinite; }
+  .app:has(#catch:not(:disabled)) .led.sig i { background: radial-gradient(circle at 40% 35%, #e8a89a, var(--blood) 70%); box-shadow: 0 0 8px rgba(var(--blood-rgb), .9), 0 0 0 1.5px #060807; animation: ledblink .8s steps(2) infinite; }
+  @keyframes ledblink { 50% { opacity: .35; } }
+  .timeleft { font-size: 14px; letter-spacing: .08em; padding: 6px 8px; min-width: 58px; text-align: center; }
+  .top .right { display: flex; align-items: center; gap: 6px; }
+  .gear { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--faint); display: grid; place-items: center; transition: color .3s; }
+  .gear .ms { font-size: 20px; font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 20; }
+  .gear:active, .gear[aria-expanded="true"] { color: var(--dim); }
+  /* panel nastavení */
+  .sheet { position: fixed; inset: 0; z-index: 25; background: rgba(2, 4, 3, .6); display: flex; align-items: flex-end; justify-content: center;
+    padding: 0 max(12px, env(safe-area-inset-left, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-right, 0px)); }
+  .sheet-in { width: 100%; max-width: 420px; padding: 12px 12px 14px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center;
+    background: linear-gradient(170deg, var(--case-hi), var(--case) 50%, var(--case-lo)); box-shadow: inset 0 1px 0 rgba(216, 214, 203, .12), inset 0 0 0 1px rgba(0, 0, 0, .6), 0 20px 50px rgba(0, 0, 0, .8); animation: sheetIn .25s ease-out; }
+  @keyframes sheetIn { from { transform: translateY(12px); opacity: 0; } }
+  .sheet-row { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  /* mapa a její popisek (vkládá se skriptem do radaru) */
+  .radar .map { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; mix-blend-mode: screen; opacity: 0; transition: opacity 1.5s; pointer-events: none; }
+  /* světlá mapa OSM -> negativ, bez barev, do zeleného fosforu */
+  .radar .map { filter: invert(1) grayscale(1) sepia(.35) hue-rotate(95deg) brightness(.75) contrast(1.6); }
+  .radar.mapon .map { opacity: .42; }
+  .radar .attr { position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); z-index: 4; font: 400 7px/1 var(--mono); letter-spacing: .04em; color: rgba(var(--ghost-rgb), .4); white-space: nowrap; pointer-events: none; }
+  .radar .attr a { color: inherit; text-decoration: none; }
+
+  /* Radar: kulatá obrazovka v kovovém rámu, pod sklem */
+  .stagebox { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; }
+  .scope {
+    position: relative; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); border-radius: 50%; padding: 4%;
+    background: conic-gradient(from 210deg, #22272405, #0a0d0b 0deg, #2a302c 50deg, #0c0f0e 110deg, #1d221f 180deg, #0a0d0b 250deg, #262b28 310deg, #0a0d0b 360deg);
+    box-shadow: inset 0 2px 3px rgba(216, 214, 203, .1), inset 0 -2px 3px rgba(0, 0, 0, .8), 0 0 0 1px rgba(0, 0, 0, .7), 0 1px 0 1px rgba(216, 214, 203, .05), 0 10px 30px rgba(0, 0, 0, .6);
+  }
+  .scope::before { content: ""; position: absolute; inset: 2.2%; border-radius: 50%; background: radial-gradient(circle, transparent 60%, rgba(0, 0, 0, .5)); box-shadow: inset 0 1px 1px rgba(216, 214, 203, .08), inset 0 0 0 1px rgba(0, 0, 0, .9); pointer-events: none; }
+  .radar {
+    position: relative; width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+    background: radial-gradient(circle at 50% 50%, #101a14 0, var(--phosphor) 55%, #040706 100%);
+    box-shadow: inset 0 0 0 2px #000, inset 0 0 50px rgba(0, 0, 0, .95), inset 0 0 18px rgba(var(--ghost-rgb), .06);
+  }
+  .radar.off { background: radial-gradient(circle at 50% 50%, #0a0f0c 0, #050807 60%, #030504 100%); }
+  /* mřížka: kruhy vzdálenosti, kříž a stupnice po obvodu */
+  .grid { position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background:
+      repeating-radial-gradient(circle at center, transparent 0 19.6%, rgba(var(--ghost-rgb), .09) 19.6% 20%),
+      linear-gradient(rgba(var(--ghost-rgb), .07), rgba(var(--ghost-rgb), .07)) 50% 0 / 1px 100% no-repeat,
+      linear-gradient(rgba(var(--ghost-rgb), .07), rgba(var(--ghost-rgb), .07)) 0 50% / 100% 1px no-repeat;
+  }
+  .grid::before, .grid::after { content: ""; position: absolute; inset: 0; border-radius: 50%; }
+  .grid::before { background: repeating-conic-gradient(from -.3deg, rgba(var(--ghost-rgb), .2) 0 .6deg, transparent .6deg 5deg);
+    -webkit-mask: radial-gradient(circle, transparent 47.6%, #000 47.9%, #000 49.4%, transparent 49.7%); mask: radial-gradient(circle, transparent 47.6%, #000 47.9%, #000 49.4%, transparent 49.7%); }
+  .grid::after { background: repeating-conic-gradient(from -.45deg, rgba(var(--ghost-rgb), .3) 0 .9deg, transparent .9deg 30deg);
+    -webkit-mask: radial-gradient(circle, transparent 45.6%, #000 45.9%, #000 49.4%, transparent 49.7%); mask: radial-gradient(circle, transparent 45.6%, #000 45.9%, #000 49.4%, transparent 49.7%); }
   .sweep {
     position: absolute; inset: 0; border-radius: 50%;
-    background: conic-gradient(from 0deg, transparent 0deg 300deg, rgba(185, 214, 200, .13) 360deg);
-    animation: spin 6s linear infinite;
+    background: conic-gradient(from 0deg, transparent 0deg 250deg, rgba(var(--ghost-rgb), .02) 290deg, rgba(var(--ghost-rgb), .14) 350deg, rgba(var(--ghost-rgb), .26) 358deg, rgba(235, 248, 240, .6) 360deg);
+    animation: spin 6s linear infinite; will-change: transform;
   }
-  .radar.off .sweep { animation-play-state: paused; opacity: .3; }
+  .radar.off .sweep { animation-play-state: paused; opacity: .15; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .me { position: absolute; left: 50%; top: 50%; width: 2.4%; aspect-ratio: 1; margin: -1.2% 0 0 -1.2%; border-radius: 50%; background: var(--fg); opacity: .7; box-shadow: 0 0 10px rgba(216, 214, 203, .5); }
-  .north { position: absolute; top: 3%; left: 50%; transform: translateX(-50%); font: 500 11px/1 var(--mono); letter-spacing: .2em; color: var(--faint); }
+  .me { position: absolute; left: 50%; top: 50%; width: 2.4%; aspect-ratio: 1; margin: -1.2% 0 0 -1.2%; border-radius: 50%; background: var(--fg); opacity: .75; box-shadow: 0 0 10px rgba(216, 214, 203, .5); }
+  .me::after { content: ""; position: absolute; inset: -180%; border-radius: 50%; border: 1px solid rgba(var(--ghost-rgb), .25); }
+  .north { position: absolute; top: 7.5%; left: 50%; transform: translateX(-50%); font: 600 11px/1 var(--label); letter-spacing: .2em; color: rgba(var(--ghost-rgb), .55); text-shadow: 0 0 6px rgba(var(--ghost-rgb), .4); transition: opacity .5s; }
+  .radar.off .north { opacity: .25; }
+  /* sklo: řádkování obrazovky a odlesk; nad vším, ale propouští ťuknutí */
+  .glass { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; z-index: 3;
+    background:
+      radial-gradient(55% 38% at 32% 16%, rgba(216, 214, 203, .07), transparent 70%),
+      radial-gradient(circle at 50% 50%, transparent 72%, rgba(0, 0, 0, .55) 100%),
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, .22) 0 1px, transparent 1px 3px);
+  }
+  .glass::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 1px 0 rgba(216, 214, 203, .12), inset 0 -1px 0 rgba(0, 0, 0, .8); }
 
   /* Světýlka (bludičky) na radaru */
   .dot {
     position: absolute; width: 18%; aspect-ratio: 1; margin: -9% 0 0 -9%; padding: 0; border: 0; border-radius: 50%;
-    display: none; background: radial-gradient(circle, rgba(232, 240, 234, .95) 0 6%, rgba(185, 214, 200, .45) 16%, rgba(185, 214, 200, .12) 36%, transparent 62%);
+    display: none; background: radial-gradient(circle, rgba(232, 240, 234, .95) 0 6%, rgba(var(--ghost-rgb), .45) 16%, rgba(var(--ghost-rgb), .12) 36%, transparent 62%);
     transition: left .4s linear, top .4s linear, opacity .6s;
   }
   .dot.pick { display: block; cursor: pointer; animation: wisp 3.4s ease-in-out infinite; }
   .dot.pick:nth-of-type(2n) { animation-duration: 4.1s; animation-delay: -1.3s; }
   .dot.pick:nth-of-type(3n) { animation-duration: 3.7s; animation-delay: -2.2s; }
   .dot.tgt { display: block; cursor: default; width: 22%; margin: -11% 0 0 -11%; animation: wisp 2.6s ease-in-out infinite; }
-  .dot.tgt.near { background: radial-gradient(circle, rgba(250, 232, 220, .95) 0 6%, rgba(201, 164, 106, .5) 16%, rgba(168, 68, 58, .16) 38%, transparent 64%); animation-duration: 1.4s; }
-  .dot.found { display: block; width: 6%; margin: -3% 0 0 -3%; background: none; border: 1px solid rgba(185, 214, 200, .35); cursor: default; }
-  .dot.found::after { content: ""; position: absolute; inset: 35%; border-radius: 50%; background: rgba(201, 164, 106, .7); box-shadow: 0 0 6px rgba(201, 164, 106, .8); }
+  .dot.tgt.near { background: radial-gradient(circle, rgba(250, 232, 220, .95) 0 6%, rgba(var(--ember-rgb), .5) 16%, rgba(var(--blood-rgb), .16) 38%, transparent 64%); animation-duration: 1.4s; }
+  .dot.found { display: block; width: 6%; margin: -3% 0 0 -3%; background: none; border: 1px solid rgba(var(--ghost-rgb), .35); cursor: default; }
+  .dot.found::after { content: ""; position: absolute; inset: 35%; border-radius: 50%; background: rgba(var(--ember-rgb), .7); box-shadow: 0 0 6px rgba(var(--ember-rgb), .8); }
   @keyframes wisp { 0%, 100% { opacity: .55; transform: scale(.9) translate(0, 0); } 30% { opacity: 1; transform: scale(1.05) translate(2%, -3%); } 60% { opacity: .7; transform: scale(.95) translate(-2%, 1%); } 80% { opacity: .95; } }
-
-  /* Údaje */
-  .info { display: flex; flex-direction: column; gap: 6px; }
-  .readout { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .value { font: 400 32px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
-  .value small { font-size: 14px; color: var(--dim); margin-left: 4px; }
-  .state { font: italic 500 19px/1.2 var(--serif); color: var(--dim); text-align: right; }
-  .state.warn { color: var(--ember); }
-  .state.alert { color: #d07a6e; }
-  /* Ručkový měřák a číselný údaj, jako na skutečném detektoru */
-  .gauge { position: relative; width: 132px; flex: none; }
-  .gauge svg { width: 100%; height: auto; display: block; }
-  .gauge #needle { transform-origin: 100px 100px; transition: transform .12s ease-out; }
-  .emf { font: 400 13px/1 var(--mono); color: var(--ghost); text-align: center; margin-top: -4px; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
-  .emf small { color: var(--dim); margin-left: 3px; font-size: 10px; }
-  .readrow { display: flex; align-items: center; gap: 12px; }
-  .readrow .readcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .radar .bootlabel { position: absolute; left: 50%; top: 64%; transform: translateX(-50%); font: 600 11px/1 var(--label); letter-spacing: .34em; color: var(--ghost); text-shadow: 0 0 8px rgba(var(--ghost-rgb), .6); opacity: 0; }
   .radar.boot .sweep { animation-duration: .7s; opacity: 1; }
-  .radar .bootlabel { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font: 500 11px/1 var(--mono); letter-spacing: .3em; color: var(--ghost); opacity: 0; }
-  .radar.boot .bootlabel { opacity: .8; animation: blinkt .5s steps(2) infinite; }
+  .radar.boot .bootlabel { opacity: .9; animation: blinkt .5s steps(2) infinite; }
   @keyframes blinkt { 50% { opacity: .2; } }
-  .meter { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; height: 10px; }
-  .meter i { border-radius: 1px; background: rgba(190, 205, 195, .07); transition: background .3s, box-shadow .3s; }
-  .meter i.on { background: rgba(185, 214, 200, .7); box-shadow: 0 0 8px rgba(185, 214, 200, .4); }
-  .meter i.on:nth-child(n+7) { background: var(--ember); box-shadow: 0 0 8px rgba(201, 164, 106, .5); }
-  .meter i.on:nth-child(n+9) { background: var(--blood); box-shadow: 0 0 10px rgba(168, 68, 58, .6); }
-  .say { margin: 0; min-height: 3em; font: italic 500 20px/1.35 var(--serif); color: var(--fg); text-wrap: pretty; }
-  .dirhint { margin: 0; font: 400 11px/1.4 var(--mono); color: var(--faint); min-height: 1.4em; letter-spacing: .03em; }
 
-  /* Tlačítka jen s ikonami */
-  .ctl { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 8px; }
-  .btn {
-    min-width: 0; display: grid; place-items: center; padding: 14px 6px; border-radius: 14px;
-    border: 1px solid var(--line); background: var(--panel); color: var(--fg);
-    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); transition: opacity .3s, border-color .3s, box-shadow .3s;
+  /* Údaje: ručkový měřák za sklíčkem, prosvícená okénka, sloupec kontrolek */
+  .info { display: flex; flex-direction: column; gap: 6px; padding-inline: 2px; }
+  .readrow { display: flex; align-items: stretch; gap: 10px; }
+  .gauge {
+    position: relative; width: 148px; flex: none; border-radius: 9px; padding: 5px 5px 4px; overflow: hidden;
+    background: linear-gradient(180deg, #151a17, #0d110f 70%, #0a0d0c);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, .9), inset 0 0 0 1px rgba(0, 0, 0, .8), 0 1px 0 rgba(216, 214, 203, .08);
   }
+  .gauge::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+    background: linear-gradient(165deg, rgba(216, 214, 203, .08) 0%, rgba(216, 214, 203, .025) 38%, transparent 42%); }
+  .gauge svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .gauge #needle { transform-origin: 100px 100px; transition: transform .12s ease-out; }
+  .gauge .dialtxt { font-family: var(--label); font-weight: 600; letter-spacing: .08em; }
+  .emf { font-size: 12px; letter-spacing: .06em; text-align: center; padding: 3px 6px 2px; margin: 2px 2px 0; }
+  .emf small { color: var(--dim); margin-left: 4px; font-size: 9px; text-shadow: none; }
+  .readcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  /* teploměr: studené místo, teplota klesá s blízkostí */
+  .thermo { flex: none; width: 36px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .thermo .lbl { font-size: 8px; letter-spacing: .1em; }
+  .thermo .tube { position: relative; flex: 1; width: 12px; border-radius: 7px; background: linear-gradient(180deg, #050807, #090d0b); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .95), inset 0 0 0 1px rgba(0, 0, 0, .8), 0 1px 0 rgba(216, 214, 203, .07); overflow: hidden; }
+  .thermo .tube .ticks { position: absolute; inset: 0; background: repeating-linear-gradient(180deg, rgba(216, 214, 203, .18) 0 1px, transparent 1px 10%); background-size: 50% 100%; background-position: right; background-repeat: no-repeat; }
+  .thermo .fill { position: absolute; left: 3px; right: 3px; bottom: 3px; top: 3px; border-radius: 3px; transform-origin: 50% 100%; transform: scaleY(0);
+    background: linear-gradient(180deg, rgba(var(--ember-rgb), .85) 0%, rgba(var(--ghost-rgb), .9) 55%, #e6f2ec 100%); box-shadow: 0 0 6px rgba(var(--ghost-rgb), .35); transition: transform .4s ease-out; }
+  .thermo .tval { font-size: 9px; letter-spacing: .02em; padding: 3px 0 2px; width: 100%; text-align: center; }
+  /* osciloskop: šum, který se s blízkostí mění v souvislou vlnu */
+  .scope2 { position: relative; height: 44px; flex: none; overflow: hidden; }
+  .scope2 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .scope2 .tag { z-index: 1; }
+  .readout { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 10px 6px; flex: 1; min-height: 50px; }
+  .tag { position: absolute; left: 8px; top: 5px; font-size: 7.5px; color: rgba(var(--ghost-rgb), .32); text-shadow: none; letter-spacing: .26em; }
+  .gauge .tag { left: 9px; top: 7px; }
+  .value { font-size: 34px; line-height: 1; white-space: nowrap; flex: none; }
+  .value small { font-size: 12px; color: var(--dim); margin-left: 3px; text-shadow: none; }
+  .state { font: 600 12.5px/1.15 var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); text-align: right; text-shadow: none; transition: color .3s; max-width: 9em; }
+  .state.warn { color: var(--ember); text-shadow: 0 0 8px rgba(var(--ember-rgb), .45); }
+  .state.alert { color: #d8705f; text-shadow: 0 0 9px rgba(var(--blood-rgb), .6); animation: ledblink 1.2s steps(2) infinite; }
+  .bar { display: flex; align-items: center; gap: 8px; }
+  .bar .lbl { font-size: 8.5px; }
+  .meter { flex: 1; display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; height: 12px; padding: 2px; border-radius: 4px; background: #060807; box-shadow: inset 0 1px 3px rgba(0, 0, 0, .9), 0 1px 0 rgba(216, 214, 203, .06); }
+  .meter i { border-radius: 1.5px; background: rgba(var(--ghost-rgb), .07); box-shadow: inset 0 1px 1px rgba(0, 0, 0, .6); transition: background .25s, box-shadow .25s; }
+  .meter i:nth-child(n+7) { background: rgba(var(--ember-rgb), .09); }
+  .meter i:nth-child(n+9) { background: rgba(var(--blood-rgb), .12); }
+  .meter i.on { background: rgba(var(--ghost-rgb), .8); box-shadow: 0 0 6px rgba(var(--ghost-rgb), .55), inset 0 0 2px rgba(255, 255, 255, .4); }
+  .meter i.on:nth-child(n+7) { background: var(--ember); box-shadow: 0 0 7px rgba(var(--ember-rgb), .6), inset 0 0 2px rgba(255, 255, 255, .35); }
+  .meter i.on:nth-child(n+9) { background: #c0503f; box-shadow: 0 0 9px rgba(var(--blood-rgb), .8), inset 0 0 2px rgba(255, 255, 255, .3); }
+  .say { margin: 2px 0 0; min-height: 3em; font: italic 500 20px/1.35 var(--serif); color: var(--fg); text-wrap: pretty; }
+  .dirhint { margin: 0; font: 400 10.5px/1.4 var(--mono); color: var(--faint); min-height: 1.4em; letter-spacing: .03em; }
+
+  /* Tlačítka jen s ikonami, jako fyzické klávesy */
+  .ctl { display: flex; }
+  #catch { flex: 1; padding: 14px 6px; transition: opacity .5s, box-shadow .3s, color .3s, transform .08s; }
+  #catch:disabled { opacity: .22; }
+  #catch:not(:disabled) { animation: breathe 1.6s ease-in-out infinite, pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.015); } }
+  #catch:not(:disabled):active { animation: none; transform: translateY(1.5px); }
+  .btn {
+    min-width: 0; display: grid; place-items: center; padding: 14px 6px; border-radius: 12px; border: 0;
+    background: linear-gradient(180deg, #1d2320, #121715 55%, #0e1210); color: var(--fg);
+    box-shadow: var(--key-shadow); transition: opacity .3s, box-shadow .3s, color .3s, transform .08s;
+  }
+  .btn:not(:disabled):active { transform: translateY(1.5px); box-shadow: var(--key-shadow-down); }
   .ms { font-family: "Material Symbols Rounded"; font-weight: 400; font-style: normal; font-size: 30px; line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-feature-settings: "liga"; font-feature-settings: "liga"; -webkit-font-smoothing: antialiased; font-variation-settings: "FILL" 0, "wght" 350, "GRAD" 0, "opsz" 32; display: inline-block; }
+  .btn .ms { filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .8)); }
   .btn.primary .ms { font-size: 38px; }
+  #catch .ms { font-size: 44px; }
   #catch:not(:disabled) .ms { font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 40; }
   .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .modes .btn { padding: 20px 8px; }
   .modes .btn .ms { font-size: 52px; font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 48; }
-  .btn svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-  .btn .fill { fill: currentColor; stroke: none; }
-  .btn:disabled { opacity: .28; cursor: default; }
-  .btn.primary { border-color: rgba(185, 214, 200, .35); color: var(--ghost); }
-  .btn.primary svg { width: 34px; height: 34px; }
-  #catch:not(:disabled) { color: #f2e6d8; border-color: rgba(201, 164, 106, .7); box-shadow: 0 0 28px rgba(201, 164, 106, .35), inset 0 0 18px rgba(201, 164, 106, .15); animation: breathe 1.6s ease-in-out infinite; }
-  @keyframes breathe { 50% { box-shadow: 0 0 40px rgba(201, 164, 106, .55), inset 0 0 24px rgba(201, 164, 106, .25); } }
+  .btn:disabled { opacity: .35; cursor: default; color: var(--dim); }
+  .btn.primary { color: var(--ghost); }
+  #catch:not(:disabled) { color: #f6e9d6; background: linear-gradient(180deg, #3a2f20, #241c12 55%, #1a140d); box-shadow: var(--key-shadow), 0 0 24px rgba(var(--ember-rgb), .3); }
+  @keyframes breathe { 50% { box-shadow: var(--key-shadow), 0 0 36px rgba(var(--ember-rgb), .5); } }
   .btn[aria-pressed="false"] { color: var(--faint); }
   .testbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 
   /* Úvod a obrazovka nálezu */
   .overlay {
-    position: fixed; inset: 0; z-index: 20; background: radial-gradient(ellipse at 50% 35%, #0d1311 0, var(--bg) 70%);
+    position: fixed; inset: 0; z-index: 20; background: radial-gradient(ellipse at 50% 35%, #0c1210 0, var(--bg) 70%);
     padding-block: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-bottom, 0px));
     padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
     display: flex; flex-direction: column; overflow: auto;
   }
   .overlay-in { position: relative; z-index: 2; max-width: 500px; width: 100%; margin: auto; display: flex; flex-direction: column; gap: 16px; }
-  .intro h1 { margin: 0; font: 500 52px/1 var(--serif); letter-spacing: .02em; color: var(--fg); animation: dim 7s ease-in-out infinite; }
+  .intro .kicker { margin: 0 0 -4px; font: 500 10px/1 var(--label); letter-spacing: .32em; text-transform: uppercase; color: var(--ember); opacity: .85; }
+  .intro h1 { margin: 0; font: 500 52px/1 var(--serif); letter-spacing: .02em; color: var(--fg); animation: dim 7s ease-in-out infinite; text-shadow: 0 0 30px rgba(var(--ghost-rgb), .12); }
   @keyframes dim { 0%, 100% { opacity: 1; } 46% { opacity: 1; } 48% { opacity: .55; } 50% { opacity: .95; } 52% { opacity: .7; } 54% { opacity: 1; } }
   .intro .sub { margin: -6px 0 0; font: italic 500 21px/1.3 var(--serif); color: var(--dim); }
   .intro p { margin: 0; color: var(--dim); font-size: 17px; }
-  .note { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-left: 1px solid rgba(201, 164, 106, .5); background: rgba(16, 20, 19, .5); font-size: 16px; color: var(--fg); }
-  .note b { font: 500 10px/1.4 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--ember); }
+  .note { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-left: 2px solid rgba(var(--ember-rgb), .55); border-radius: 0 8px 8px 0; background: linear-gradient(90deg, rgba(16, 20, 19, .8), rgba(16, 20, 19, .4)); box-shadow: inset 0 1px 0 rgba(216, 214, 203, .05); font-size: 16px; color: var(--fg); }
+  .note b { font: 600 10px/1.4 var(--label); letter-spacing: .24em; text-transform: uppercase; color: var(--ember); }
   .btns { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
   .btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btnrow.secondary { grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); }
+  .btnrow.secondary .btn { padding: 9px 6px; color: var(--dim); }
+  .btnrow.secondary .ms { font-size: 24px; }
+  .btnrow.secondary #resume { color: var(--ghost); }
   .intro .btn.primary { padding: 20px 12px; }
-  .intro .btn.primary svg { width: 44px; height: 44px; }
   .voicerow { display: flex; align-items: center; gap: 10px; }
-  .voicerow span { font: 500 10px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
-  .voicerow select { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(16, 20, 19, .8); color: var(--fg); font: 15px/1.3 var(--serif); }
+  .voicerow span { font: 600 10px/1 var(--label); letter-spacing: .24em; text-transform: uppercase; color: var(--dim); }
+  .voicerow select { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: rgba(16, 20, 19, .8); color: var(--fg); font: 15px/1.3 var(--serif); }
   .msg { min-height: 2.6em; font: italic 500 16px/1.4 var(--serif); color: var(--ember); }
 
-  .reveal { text-align: center; background: radial-gradient(ellipse at 50% 40%, #0a0e0c 0, #020303 70%); }
+  .reveal { text-align: center; background: radial-gradient(ellipse at 50% 40%, #090d0b 0, #010202 70%); }
   .reveal .overlay-in { align-items: center; gap: 18px; }
-  .eyes { width: min(64vw, 300px); height: auto; opacity: 0; animation: eyesIn 4.5s ease-out .5s forwards; }
+  .eyes { width: min(72vw, 340px); height: auto; opacity: 0; animation: eyesIn 4.5s ease-out .5s forwards; }
   .eyes .lid { transform-box: fill-box; transform-origin: center; animation: blink 5.5s ease-in-out 2.4s infinite; }
   @keyframes eyesIn { 0% { opacity: 0; transform: translateY(6px) scale(.96); } 35% { opacity: .9; } 100% { opacity: .75; transform: none; } }
   @keyframes blink { 0%, 90%, 100% { transform: scaleY(1); } 93%, 95% { transform: scaleY(.05); } }
   .reveal h2 { margin: 0; font: italic 500 40px/1.1 var(--serif); color: var(--fg); opacity: 0; animation: rise 1.6s ease-out .2s forwards; }
-  .reveal .quote { margin: 0; font: 500 20px/1.4 var(--serif); color: var(--dim); max-width: 22em; opacity: 0; animation: rise 1.6s ease-out 1s forwards; }
+  .reveal .quote { margin: 0; padding: 12px 18px; font: 500 21px/1.4 var(--serif); color: var(--fg); max-width: 20em; text-wrap: pretty; opacity: 0; animation: rise 1.6s ease-out 1s forwards;
+    border-top: 1px solid rgba(var(--ember-rgb), .45); border-bottom: 1px solid rgba(var(--ember-rgb), .2); }
+  .reveal .quote:empty { display: none; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .score { display: flex; gap: 22px; justify-content: center; align-items: flex-end; }
   .score .candle { width: 26px; height: 58px; }
   .reveal .btn { width: 100%; max-width: 340px; padding: 18px 12px; opacity: 0; animation: rise 1s ease-out 1.8s forwards; }
-  .reveal .btn svg { width: 36px; height: 36px; }
   .reveal .btn .ms { font-size: 40px; }
   .time { font: 400 15px/1 var(--mono); color: var(--dim); letter-spacing: .08em; }
 
-  @media (max-height: 640px) { .say { min-height: 2.6em; font-size: 17px; } .value { font-size: 26px; } .intro h1 { font-size: 40px; } }
+  @media (max-height: 700px) { .say { min-height: 2.6em; font-size: 18px; } .top { min-height: 40px; } .candle { height: 32px; width: 14px; } }
+  @media (max-height: 640px) {
+    .say { font-size: 16px; line-height: 1.3; } .value { font-size: 24px; } .intro h1 { font-size: 40px; }
+    .btn { padding: 10px 6px; } .ms { font-size: 26px; } .btn.primary .ms { font-size: 32px; }
+    .gauge { width: 118px; } .value { font-size: 26px; } .scope2 { height: 36px; } .readout { padding: 12px 8px 4px; min-height: 42px; } .thermo { width: 32px; } .info { gap: 3px; } .say { min-height: 2.4em; }
+    #catch { padding: 9px 6px; } #catch .ms { font-size: 36px; } .app { gap: 6px; padding: 10px 10px 8px; } .readout { padding: 4px 8px; }
+  }
+  @media (min-height: 860px) {
+    .app { gap: 12px; padding: 14px 14px 12px; } .top { min-height: 50px; } .candle { width: 18px; height: 40px; }
+    .gauge { width: 172px; } .value { font-size: 40px; } .scope2 { height: 56px; } .thermo { width: 42px; } #catch { padding: 20px 6px; } #catch .ms { font-size: 52px; } .state { font-size: 14px; } .emf { font-size: 13px; }
+    .meter { height: 14px; } .say { font-size: 22px; } .btn { padding: 17px 6px; } .ms { font-size: 32px; } .btn.primary .ms { font-size: 42px; }
+    .info { gap: 8px; }
+  }
+  @media (max-width: 370px) { .leds { gap: 10px; } .plate .model { display: none; } .top { padding-inline: 4px; } }
   @media (prefers-reduced-motion: reduce) {
-    .fog::before, .fog::after, .grain, .sweep, .dot, .candle .flame, .intro h1, #catch, .eyes .lid { animation: none !important; }
+    .fog::before, .fog::after, .grain, .sweep, .dot, .candle .flame, .intro h1, #catch, .eyes .lid, .led i, .bootlabel, .state, .sheet-in { animation: none !important; }
     .eyes, .reveal h2, .reveal .quote, .reveal .btn { animation: none !important; opacity: 1; }
+    .radar.boot .bootlabel { opacity: .9; }
   }
 </style>
 </head>
@@ -220,37 +362,68 @@
 <div class="fx fog" aria-hidden="true"></div>
 
 <main class="app">
+  <i class="screw tl" aria-hidden="true"></i><i class="screw tr" aria-hidden="true"></i><i class="screw bl" aria-hidden="true"></i><i class="screw br" aria-hidden="true"></i>
   <header class="top">
     <div class="candles" id="candles" role="img" aria-label="Nalezeno 0 ze 3"></div>
-    <div class="timeleft" id="time">0:00</div>
+    <div class="plate" aria-hidden="true">
+      <div class="lbl model">Detektor · typ II</div>
+      <div class="leds">
+        <span class="led pwr"><i></i><span class="lbl">Zap</span></span>
+        <span class="led cal"><i></i><span class="lbl">Kal</span></span>
+        <span class="led sig"><i></i><span class="lbl">Cíl</span></span>
+      </div>
+    </div>
+    <div class="right">
+      <div class="timeleft lcd" id="time">0:00</div>
+      <button class="gear" id="menu" type="button" aria-label="Nastavení" title="Nastavení" aria-expanded="false" aria-controls="sheet"><span class="ms" aria-hidden="true">settings</span></button>
+    </div>
   </header>
 
   <div class="stagebox">
-    <div class="radar off" id="radar">
-      <div class="sweep" aria-hidden="true"></div>
-      <div class="north" id="north" aria-hidden="true">N</div>
-      <div class="me" aria-hidden="true"></div>
-      <div class="bootlabel" aria-hidden="true">KALIBRACE</div>
+    <div class="scope">
+      <div class="radar off" id="radar">
+        <div class="grid" aria-hidden="true"></div>
+        <div class="sweep" aria-hidden="true"></div>
+        <div class="north" id="north" aria-hidden="true">N</div>
+        <div class="me" aria-hidden="true"></div>
+        <div class="bootlabel" aria-hidden="true">KALIBRACE</div>
+        <div class="glass" aria-hidden="true"></div>
+      </div>
     </div>
   </div>
 
   <div class="info">
     <div class="readrow">
       <div class="gauge" aria-hidden="true">
-        <svg viewBox="0 0 200 112">
-          <path d="M22 100 A78 78 0 0 1 178 100" fill="none" stroke="rgba(185,214,200,.18)" stroke-width="2"/>
-          <path d="M139 32.5 A78 78 0 0 1 178 100" fill="none" stroke="rgba(168,68,58,.7)" stroke-width="4"/>
-          <g id="ticks" stroke="rgba(185,214,200,.45)" stroke-width="1.5"></g>
-          <text x="30" y="92" fill="rgba(185,214,200,.4)" font-family="IBM Plex Mono, monospace" font-size="10">0</text>
-          <text x="160" y="92" fill="rgba(168,68,58,.8)" font-family="IBM Plex Mono, monospace" font-size="10">!</text>
-          <line id="needle" x1="100" y1="100" x2="100" y2="30" stroke="#e9dfc9" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="100" cy="100" r="5" fill="#1a1f1d" stroke="rgba(185,214,200,.5)"/>
+        <span class="lbl tag">Síla pole</span>
+        <svg viewBox="0 0 200 108">
+          <path d="M29.4 62.4 A80 80 0 0 1 170.6 62.4" fill="none" stroke="rgba(216,214,203,.3)" stroke-width="1.5"/>
+          <path d="M149.3 37 A80 80 0 0 1 170.6 62.4" fill="none" stroke="rgba(168,68,58,.85)" stroke-width="5"/>
+          <path d="M34 59 A76 76 0 0 1 166 59" fill="none" stroke="rgba(216,214,203,.22)" stroke-width="4" stroke-dasharray=".9 4.406" stroke-dashoffset="-2.2"/>
+          <g id="ticks" stroke="rgba(216,214,203,.55)" stroke-width="1.5"></g>
+          <text class="dialtxt" x="51.5" y="74" text-anchor="middle" fill="rgba(216,214,203,.5)" font-size="9">0</text>
+          <text class="dialtxt" x="100" y="47" text-anchor="middle" fill="rgba(216,214,203,.5)" font-size="9">5</text>
+          <text class="dialtxt" x="148.5" y="74" text-anchor="middle" fill="rgba(168,68,58,.9)" font-size="9">10</text>
+          <text class="dialtxt" x="100" y="86" text-anchor="middle" fill="rgba(216,214,203,.28)" font-size="8" letter-spacing=".2em">mG</text>
+          <g id="needle">
+            <line x1="101.5" y1="102" x2="101.5" y2="28" stroke="rgba(0,0,0,.6)" stroke-width="3" stroke-linecap="round"/>
+            <line x1="100" y1="100" x2="100" y2="26" stroke="#e9dfc9" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="100" y1="36" x2="100" y2="26" stroke="#c0503f" stroke-width="2.2" stroke-linecap="round"/>
+          </g>
+          <circle cx="100" cy="100" r="7" fill="#151a17" stroke="rgba(216,214,203,.35)"/>
+          <circle cx="100" cy="100" r="2.2" fill="#0a0d0c" stroke="rgba(216,214,203,.4)" stroke-width=".8"/>
         </svg>
-        <div class="emf"><span id="emf">0.00</span><small>mG</small></div>
+        <div class="emf lcd"><span id="emf">0.00</span><small>mG</small></div>
+      </div>
+      <div class="thermo" aria-hidden="true">
+        <span class="lbl">°C</span>
+        <div class="tube"><i class="ticks"></i><i class="fill" id="tfill"></i></div>
+        <div class="tval lcd" id="tval">--</div>
       </div>
       <div class="readcol">
-        <div class="readout"><div class="value" id="value">--<small>m</small></div><div class="state" id="state"></div></div>
-        <div class="meter" id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="readout lcd"><span class="lbl tag">Vzdálenost</span><div class="value" id="value">--<small>m</small></div><div class="state" id="state"></div></div>
+        <div class="scope2 lcd" aria-hidden="true"><span class="lbl tag">Průběh</span><canvas id="osc"></canvas></div>
+        <div class="bar"><span class="lbl">Signál</span><div class="meter" id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
       </div>
     </div>
     <p class="say" id="say" aria-live="polite"></p>
@@ -259,10 +432,6 @@
 
   <div class="ctl">
     <button class="btn primary" id="catch" type="button" disabled aria-label="Chyť strašidlo" title="Chyť strašidlo"><span class="ms" aria-hidden="true">back_hand</span></button>
-    <button class="btn" id="newgame" type="button" aria-label="Nová hra" title="Nová hra"><span class="ms" aria-hidden="true">restart_alt</span></button>
-    <button class="btn" id="sound" type="button" aria-pressed="true" aria-label="Zvuk" title="Zvuk"><span class="ms" data-on="volume_up" data-off="volume_off" aria-hidden="true">volume_up</span></button>
-    <button class="btn" id="voice" type="button" aria-pressed="true" aria-label="Hlas" title="Hlas"><span class="ms" data-on="record_voice_over" data-off="voice_over_off" aria-hidden="true">record_voice_over</span></button>
-    <button class="btn" id="fs" type="button" aria-label="Celá obrazovka" title="Celá obrazovka"><span class="ms" data-on="fullscreen" data-off="fullscreen_exit" aria-hidden="true">fullscreen</span></button>
   </div>
   <div class="testbar" id="testbar" hidden>
     <button class="btn" id="tl" type="button" aria-label="Otočit doleva" title="Otočit doleva"><span class="ms" aria-hidden="true">rotate_left</span></button>
@@ -271,11 +440,25 @@
   </div>
 </main>
 
+<!-- Nastavení: malý panel otevřený ozubeným kolečkem; zavře se ťuknutím mimo nebo po volbě -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in" role="dialog" aria-label="Nastavení">
+    <div class="lbl">Nastavení</div>
+    <div class="sheet-row">
+      <button class="btn" id="sound" type="button" aria-pressed="true" aria-label="Zvuk" title="Zvuk"><span class="ms" data-on="volume_up" data-off="volume_off" aria-hidden="true">volume_up</span></button>
+      <button class="btn" id="voice" type="button" aria-pressed="true" aria-label="Hlas" title="Hlas"><span class="ms" data-on="record_voice_over" data-off="voice_over_off" aria-hidden="true">record_voice_over</span></button>
+      <button class="btn" id="fs" type="button" aria-label="Celá obrazovka" title="Celá obrazovka"><span class="ms" data-on="fullscreen" data-off="fullscreen_exit" aria-hidden="true">fullscreen</span></button>
+      <button class="btn" id="newgame" type="button" aria-label="Nová hra" title="Nová hra"><span class="ms" aria-hidden="true">restart_alt</span></button>
+    </div>
+  </div>
+</div>
+
 <section class="overlay intro" id="intro">
   <div class="overlay-in">
+    <p class="kicker">Detektor strašidel</p>
     <h1>Lovci duchů</h1>
     <p class="sub">Venku, za šera, poslouchej.</p>
-    <p>Detektor kolem tebe zachytí strašidla. Na radaru se rozsvítí světýlka. Ťukni na jedno a jdi za ním. Až budeš blízko, uslyšíš ho. Co to bylo, se nedozvíš. Jen že je někde tady.</p>
+    <p>Detektor kolem tebe zachytí strašidla. Na radaru se rozsvítí světýlka. Ťukni na jedno a jdi za ním. Až budeš blízko, uslyšíš ho. Strašidla se schovávají u chodníků a cest. Když ho najdeš, detektor ti řekne, co máš udělat.</p>
     <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. <span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_car</span> Z auta: pět strašidel se objevuje před autem, hraje jen spolujezdec, nikdy řidič. Je potřeba zapnutá poloha (GPS).</span></div>
     <div class="note" id="ioshint" hidden><b>Přes celou obrazovku</b><span>Na iPhonu ťukni na Sdílet a pak Přidat na plochu. Detektor se pak otevře jako aplikace bez lišt prohlížeče.</span></div>
     <div class="btns">
@@ -283,8 +466,8 @@
         <button class="btn primary" id="begin" type="button" aria-label="Hledat pěšky" title="Hledat pěšky"><span class="ms" aria-hidden="true">directions_walk</span></button>
         <button class="btn primary" id="carbtn" type="button" aria-label="Hledat z auta" title="Hledat z auta"><span class="ms" aria-hidden="true">directions_car</span></button>
       </div>
-      <button class="btn" id="resume" type="button" hidden aria-label="Pokračovat v rozehrané hře" title="Pokračovat v rozehrané hře"><span class="ms" aria-hidden="true">resume</span></button>
-      <div class="btnrow">
+      <div class="btnrow secondary">
+        <button class="btn" id="resume" type="button" hidden aria-label="Pokračovat v rozehrané hře" title="Pokračovat v rozehrané hře"><span class="ms" aria-hidden="true">resume</span></button>
         <button class="btn" id="testbtn" type="button" aria-label="Zkouška doma bez GPS" title="Zkouška doma bez GPS"><span class="ms" aria-hidden="true">home</span></button>
         <button class="btn" id="sndtest" type="button" aria-label="Test zvuku" title="Test zvuku"><span class="ms" aria-hidden="true">hearing</span></button>
       </div>
@@ -577,6 +760,183 @@
   var bars = Array.prototype.slice.call(document.querySelectorAll("#meter i"));
   var dots = [];
 
+  /* ---------- OpenStreetMap: cesty v okolí a mapa na radaru ---------- */
+  var OVERPASS = ["https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+  /* stáhne cesty (highway) v okruhu; zkouší víc serverů, každý nejvýš 7 s */
+  function osmWays(lat, lon, radius, re) {
+    var q = "[out:json][timeout:8];way(around:" + Math.round(radius) + "," + lat.toFixed(6) + "," + lon.toFixed(6) + ")[highway~\"" + re + "\"];out tags geom;";
+    var i = 0;
+    function attempt() {
+      if (i >= OVERPASS.length) return Promise.reject(new Error("overpass"));
+      var url = OVERPASS[i++] + "?data=" + encodeURIComponent(q), ac = window.AbortController ? new AbortController() : null;
+      var tm = setTimeout(function () { if (ac) ac.abort(); }, 7000);
+      return fetch(url, ac ? { signal: ac.signal } : {}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) {
+          clearTimeout(tm);
+          return (d.elements || []).filter(function (e) { return e.geometry && e.geometry.length > 1; })
+            .map(function (e) { var t = e.tags || {}; return { hw: t.highway || "", foot: t.foot, fw: t.footway, pts: e.geometry.map(function (g) { return { lat: g.lat, lon: g.lon }; }) }; });
+        })
+        .catch(function () { clearTimeout(tm); return attempt(); });
+    }
+    return attempt();
+  }
+  /* chodníky a pěšiny mají přednost, klidné ulice jsou záloha; velké silnice nikdy */
+  /* stahujeme i velké silnice, ale jen proto, abychom se jim vyhnuli */
+  var FOOT_RE = "^(footway|path|pedestrian|living_street|track|cycleway|bridleway|residential|service|unclassified|tertiary|secondary|primary|trunk|motorway|tertiary_link|secondary_link|primary_link|trunk_link|motorway_link)$";
+  var DANGER = /^(tertiary|secondary|primary|trunk|motorway)(_link)?$/;
+  var ROAD_RE = "^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$";
+  function footPref(w) {
+    if (w.foot === "no" || w.fw === "crossing" || DANGER.test(w.hw)) return 0;
+    if (/^(footway|path|pedestrian|living_street|track|cycleway|bridleway)$/.test(w.hw)) return 1;
+    if (/^(residential|service|unclassified)$/.test(w.hw)) return 2;
+    return 0;
+  }
+  /* body každé 3 m podél cest, jen v daném rozmezí vzdálenosti od startu */
+  function samplePaths(o, ways, rMin, rMax) {
+    var out = [], danger = ways.filter(function (w) { return DANGER.test(w.hw); });
+    ways.forEach(function (w) {
+      var pref = footPref(w); if (!pref) return;
+      for (var k = 1; k < w.pts.length; k++) {
+        var a = w.pts[k - 1], b = w.pts[k], L = dist(a, b), steps = Math.max(1, Math.floor(L / 3));
+        for (var s = 0; s <= steps; s++) {
+          var t = s / steps, p = { lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t }, d = dist(o, p);
+          if (d >= rMin && d <= rMax && !(danger.length && (snapToWays(p, danger) || { d: 99 }).d < 8)) out.push({ lat: p.lat, lon: p.lon, d: d, b: bearing(o, p), pref: pref });
+        }
+      }
+    });
+    return out;
+  }
+  /* rozmístí n strašidel na cesty: každé v jiném směru, co nejvíc od sebe */
+  function placeOnPaths(o, ways, n) {
+    var pts = samplePaths(o, ways, 15, 50);
+    if (pts.length < n) return null;
+    var base = rnd(0, 360), chosen = [];
+    for (var i = 0; i < n; i++) {
+      var lo = (base + i * 360 / n) % 360, inSector = function (p) { var x = ((p.b - lo) % 360 + 360) % 360; return x < 360 / n; };
+      var far = function (p) { return chosen.every(function (c) { return dist(c, p) > 18; }); };
+      var pick = function (list) { return list.length ? list[Math.floor(Math.random() * list.length)] : null; };
+      var c = pick(pts.filter(function (p) { return p.pref === 1 && inSector(p) && far(p); })) ||
+              pick(pts.filter(function (p) { return inSector(p) && far(p); })) ||
+              pick(pts.filter(function (p) { return p.pref === 1 && far(p); })) ||
+              pick(pts.filter(far));
+      if (!c) return null;
+      chosen.push(c);
+    }
+    return chosen;
+  }
+  /* nejbližší bod na silnici k danému bodu (pro režim z auta) */
+  function snapToWays(p, ways) {
+    var best = null;
+    ways.forEach(function (w) {
+      for (var k = 1; k < w.pts.length; k++) {
+        var a = w.pts[k - 1], b = w.pts[k];
+        var kx = 111320 * Math.cos(rad(p.lat)), ax = (a.lon - p.lon) * kx, ay = (a.lat - p.lat) * 111320, bx = (b.lon - p.lon) * kx, by = (b.lat - p.lat) * 111320;
+        var dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, t = L2 ? clamp(-(ax * dx + ay * dy) / L2, 0, 1) : 0;
+        var x = ax + dx * t, y = ay + dy * t, d = Math.sqrt(x * x + y * y);
+        if (!best || d < best.d) best = { d: d, lat: p.lat + y / 111320, lon: p.lon + x / kx };
+      }
+    });
+    return best;
+  }
+
+  /* Mapa pod radarem: dlaždice OpenStreetMap přebarvené do tmavého fosforu, natočené podle směru, slabě prosvítají */
+  var TILE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png", tiles = {}, mapDirty = true, mapAt = 0, mapKey = "";
+  var mapCv = document.createElement("canvas"); mapCv.className = "map"; mapCv.setAttribute("aria-hidden", "true");
+  radar.insertBefore(mapCv, radar.firstChild);
+  var attr = document.createElement("div"); attr.className = "attr"; attr.textContent = "© OpenStreetMap"; radar.appendChild(attr);
+  function tileImg(z, x, y) {
+    var n = 1 << z; x = ((x % n) + n) % n;
+    var k = z + "/" + x + "/" + y;
+    if (tiles[k]) return tiles[k];
+    var im = new Image(); im.decoding = "async";
+    im.onload = function () { im.ok = true; mapDirty = true; };
+    im.referrerPolicy = "strict-origin-when-cross-origin";
+    im.src = TILE.replace("{z}", z).replace("{x}", x).replace("{y}", y);
+    tiles[k] = im; return im;
+  }
+  function drawMap(hdeg) {
+    var show = pos && (state === "pick" || state === "play" || state === "boot");
+    radar.classList.toggle("mapon", !!show);
+    if (!show) return;
+    var now = performance.now(), key = pos.lat.toFixed(6) + pos.lon.toFixed(6) + Math.round(hdeg) + mode;
+    if ((!mapDirty && key === mapKey) || now - mapAt < 90) return;
+    mapKey = key; mapAt = now; mapDirty = false;
+    var dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(mapCv.clientWidth * dpr), H = Math.round(mapCv.clientHeight * dpr);
+    if (!W) return;
+    if (mapCv.width !== W || mapCv.height !== H) { mapCv.width = W; mapCv.height = H; }
+    var c = mapCv.getContext("2d"), pxPerM = 0.4 * W / M.scale, cosl = Math.cos(rad(pos.lat));
+    var z = clamp(Math.round(Math.log(156543.03 * cosl * pxPerM) / Math.LN2), 3, 19), f = 156543.03 * cosl / Math.pow(2, z) * pxPerM;
+    var n = Math.pow(2, z) * 256, gx = (pos.lon + 180) / 360 * n, la = rad(pos.lat), gy = (1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H);
+    c.setTransform(1, 0, 0, 1, W / 2, H / 2); c.rotate(-rad(hdeg)); c.scale(f, f);
+    var R = Math.ceil(0.75 * W / f), x0 = Math.floor((gx - R) / 256), x1 = Math.floor((gx + R) / 256), y0 = Math.floor((gy - R) / 256), y1 = Math.floor((gy + R) / 256);
+    for (var tx = x0; tx <= x1; tx++) for (var ty = y0; ty <= y1; ty++) {
+      if (ty < 0 || ty >= (1 << z)) continue;
+      var im = tileImg(z, tx, ty);
+      if (im.ok) c.drawImage(im, tx * 256 - gx, ty * 256 - gy, 256.6, 256.6);
+    }
+  }
+
+  /* ---------- Co mají děti po nálezu hledat ----------
+     Pěšky: zeptá se OpenStreetMap, co skutečného je u strašidla (strom, lavička, lampa, hřiště…).
+     Když nic nenajde nebo jsme v autě, vybere úkol, který jde splnit kdekoli. */
+  var CLUE_OSM = {
+    bench: "Sedí na lavičce. Najdi lavičku a zaklepej na ni třikrát.",
+    tree: "Schovalo se za stromem. Najdi nejbližší strom a obejmi ho.",
+    street_lamp: "Schovává se u lampy. Najdi lampu a obejdi ji dokola.",
+    playground: "Je na hřišti. Najdi houpačku nebo skluzavku a dotkni se jí.",
+    picnic_table: "Sedí u stolu. Najdi stůl a zaklepej na něj.",
+    waste_basket: "Schovalo se u koše. Najdi koš a projdi kolem něj po špičkách.",
+    post_box: "Je u poštovní schránky. Najdi ji a pošeptej jí tajemství.",
+    fire_hydrant: "Je u hydrantu. Najdi ho, je to taková malá kovová věžička.",
+    drinking_water: "Je u pítka. Najdi pítko a dotkni se ho.",
+    bicycle_parking: "Je u stojanu na kola. Najdi ho a spočítej, kolik je tam míst.",
+    shelter: "Schovává se pod stříškou. Najdi ji a chvíli pod ní postůj.",
+    information: "Je u cedule. Najdi ceduli a ukaž na ni.",
+    gate: "Je u branky. Najdi branku a dotkni se jí.",
+    fountain: "Je u kašny. Najdi ji a poslouchej vodu."
+  };
+  var CLUE_ANY = [
+    "Najdi kámen a pošeptej mu: mám tě.",
+    "Najdi něco zeleného a ukaž na to.",
+    "Najdi list a odnes ho dospělému.",
+    "Najdi větvičku a nakresli s ní na zem kruh.",
+    "Najdi něco kulatého a dotkni se toho.",
+    "Najdi nejbližší strom a dotkni se ho."
+  ];
+  var CLUE_CAR = [
+    "Zamávej mu z okénka a řekni: na shledanou!",
+    "Najdi venku něco červeného a ukaž na to.",
+    "Zavři oči a potichu počítej do pěti.",
+    "Najdi venku strom a ukaž na něj.",
+    "Zatleskej dvakrát. Tím ho zaženeš."
+  ];
+  var clues = {};
+  function anyClue(list) { return list[Math.floor(Math.random() * list.length)]; }
+  function prefetchClue(i) {
+    var g = ghosts[i]; if (!g || g.lat == null || clues[i]) return;
+    if (mode === "car") { clues[i] = anyClue(CLUE_CAR); return; }
+    clues[i] = anyClue(CLUE_ANY);
+    var q = "[out:json][timeout:8];(node(around:25," + g.lat.toFixed(6) + "," + g.lon.toFixed(6) + ")[~\"^(natural|amenity|highway|leisure|emergency|tourism|barrier)$\"~\"^(tree|bench|street_lamp|playground|picnic_table|waste_basket|post_box|fire_hydrant|drinking_water|bicycle_parking|shelter|information|gate|fountain)$\"];way(around:25," + g.lat.toFixed(6) + "," + g.lon.toFixed(6) + ")[leisure=playground];);out center tags;";
+    var k = 0;
+    (function attempt() {
+      if (k >= OVERPASS.length) return;
+      var ac = window.AbortController ? new AbortController() : null, tm = setTimeout(function () { if (ac) ac.abort(); }, 7000);
+      fetch(OVERPASS[k++] + "?data=" + encodeURIComponent(q), ac ? { signal: ac.signal } : {}).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (d) {
+        clearTimeout(tm);
+        var best = null;
+        (d.elements || []).forEach(function (e) {
+          var t = e.tags || {}, kind = ["natural", "amenity", "highway", "leisure", "emergency", "tourism", "barrier"].map(function (x) { return t[x]; }).filter(function (v) { return CLUE_OSM[v]; })[0];
+          var p = e.lat != null ? e : e.center; if (!kind || !p) return;
+          var dd = dist(g, { lat: p.lat, lon: p.lon }) + (kind === "tree" ? 6 : 0); /* stromů je všude moc, ostatní věci mají přednost */
+          if (!best || dd < best.d) best = { d: dd, kind: kind };
+        });
+        if (best) clues[i] = CLUE_OSM[best.kind];
+      }).catch(function () { clearTimeout(tm); attempt(); });
+    })();
+  }
+
+
   function save() {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ mode: mode, origin: origin, ghosts: ghosts, startedAt: startedAt, target: target, spawnedAt: spawnedAt, startD: startD })); } catch (e) {}
   }
@@ -678,18 +1038,30 @@
     spawnedAt = savedGame && savedGame.spawnedAt || 0; startD = savedGame && savedGame.startD || 0;
     target = savedGame && typeof savedGame.target === "number" && ghosts[savedGame.target] && !ghosts[savedGame.target].caught && ghosts[savedGame.target].lat != null ? savedGame.target : null;
     finishedAt = 0; intro.hidden = true; radar.classList.remove("off");
-    lastBand = ""; shownCandles = ""; buildDots(); drawCandles(); save(); wake(true);
-    /* kalibrace po zapnutí, jako u skutečného přístroje */
+    lastBand = ""; shownCandles = ""; clues = {}; buildDots(); drawCandles(); save(); wake(true);
+    /* kalibrace po zapnutí, jako u skutečného přístroje; mezitím si stáhne cesty z OpenStreetMap
+       a strašidla posadí na chodníky a pěšiny (když se to nepovede, zůstane náhodné rozmístění) */
     state = "boot"; radar.classList.add("boot"); powerUp();
     sayEl.textContent = "Kalibruji detektor…"; speak("Kalibruji detektor.", true);
-    after(2800, function () {
+    var gen = ++bootGen, mine = ghosts;
+    var placing = mode === "walk" && !savedGame
+      ? Promise.race([osmWays(o.lat, o.lon, 75, FOOT_RE).then(function (ws) { return placeOnPaths(o, ws, N); }).catch(function () { return null; }),
+                      new Promise(function (r) { setTimeout(function () { r(null); }, 9000); })])
+      : Promise.resolve(null);
+    Promise.all([placing.then(function (pts) {
+      if (gen !== bootGen || ghosts !== mine || !pts) return;
+      pts.forEach(function (p, k) { ghosts[k].lat = p.lat; ghosts[k].lon = p.lon; });
+      save();
+    }), new Promise(function (r) { setTimeout(r, 2800); })]).then(function () {
+      if (gen !== bootGen || state !== "boot") return;
       radar.classList.remove("boot"); ambience(true);
       var pre = savedGame ? "Pokračujeme. " : "";
       if (target !== null) { chooseTarget(target, pre); return; }
       if (mode === "car") spawnNext(pre + "Připraveno. ");
-      else showPick(pre || "Tři strašidla se ukryla kolem tebe. ");
+      else showPick(pre || "Tři strašidla se ukryla kolem tebe, u cest. ");
     });
   }
+  var bootGen = 0;
   function makeCarGhosts() {
     var pool = [0, 1, 2, 3, 4];
     for (var k = pool.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)), x = pool[k]; pool[k] = pool[j]; pool[j] = x; }
@@ -701,6 +1073,13 @@
     var p = offset(pos, rnd(450, 900), dir + rnd(-12, 12));
     ghosts[i].lat = p.lat; ghosts[i].lon = p.lon;
     spawnedAt = Date.now(); startD = dist(pos, ghosts[i]); hereUntil = 0;
+    /* přichytit k nejbližší silnici, ať kolem něj opravdu projedeme */
+    osmWays(p.lat, p.lon, 250, ROAD_RE).then(function (ws) {
+      var sn = snapToWays(p, ws);
+      if (sn && sn.d < 250 && target === i && !ghosts[i].caught && ghosts[i].lat === p.lat) {
+        ghosts[i].lat = sn.lat; ghosts[i].lon = sn.lon; startD = dist(pos, ghosts[i]); save();
+      }
+    }).catch(function () {});
   }
   function spawnNext(prefix) {
     cancelLater();
@@ -718,7 +1097,7 @@
     sayEl.textContent = t; speak(t, true);
   }
   function chooseTarget(i, prefix) {
-    target = i; state = "play"; save();
+    target = i; state = "play"; save(); prefetchClue(i);
     var b0 = nearest(); lastBand = b0 ? bandOf(b0.d) : "";
     lastDir = ""; nextCall = performance.now() + 3000;
     bell(98, 0.12, 4);
@@ -741,7 +1120,8 @@
     revealEl.hidden = false; restartAnims(revealEl);
     stageEl.innerHTML = eyesSVG(zom);
     $("#rname").textContent = "Nalezeno.";
-    $("#rquote").textContent = "Je někde tady. Rozhlédni se.";
+    var clue = clues[i] || anyClue(mode === "car" ? CLUE_CAR : CLUE_ANY);
+    $("#rquote").textContent = clue;
     drawScore(); drawCandles();
     var left = ghosts.filter(function (g) { return !g.caught; }).length;
     rnext.innerHTML = ICON_NEXT; rnext.setAttribute("aria-label", "Dál"); rnext.title = "Dál";
@@ -749,7 +1129,7 @@
     if (zom) groan(c.hoo, 0.32, 0.35); else hoo(c.hoo, 0.22, 0.4);
     after(900, function () { whisper(0.16, 2.2); });
     after(1500, function () { bell(147, 0.14, 5); });
-    after(2300, function () { speak("Nalezeno. Je někde tady. Rozhlédni se.", true); });
+    after(2300, function () { speak("Nalezeno. " + clue, true); });
     try { navigator.vibrate && navigator.vibrate(zom ? [400, 120, 400] : [120, 90, 120]); } catch (e) {}
   }
   /* odložené zvuky a hlášky jedné obrazovky; při odchodu z ní se zruší */
@@ -777,6 +1157,7 @@
     $("#testbar").hidden = false; resumeData = null; startGame(pos, null);
   }
   function toIntro() {
+    bootGen++;
     cancelLater(); stopWatch(); hush(); wake(false); ambience(false); state = "intro"; test = false; $("#testbar").hidden = true;
     revealEl.hidden = true; target = null;
     intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; $("#carbtn").disabled = false; radar.classList.remove("boot"); radar.classList.add("off");
@@ -889,7 +1270,7 @@
     level += (tgt - level) * 0.08;
     for (var i = 0; i < bars.length; i++) bars[i].classList.toggle("on", state === "play" && level >= i + 0.5);
     if (state === "play" || state === "pick") timeEl.textContent = mmss((Date.now() - startedAt) / 1000);
-    drawCandles(); drawGauge();
+    drawMap(hd.h === null ? 0 : hd.h); drawCandles(); drawGauge();
   }
   /* Hlasové pokyny ke směru (jen s kompasem) */
   var lastDir = "", lastDirAt = 0;
@@ -962,6 +1343,39 @@
       var v = state === "play" || state === "boot" ? 0.04 + 9.5 * k * k + Math.random() * (0.05 + 0.6 * k) : 0.02 + Math.random() * 0.03;
       emfEl.textContent = v.toFixed(2);
     }
+    drawExtra(k);
+  }
+  /* teploměr a osciloskop: jen zobrazení, řídí se stejnou silou signálu jako ručka */
+  var tfill = document.getElementById("tfill"), tval = document.getElementById("tval"), osc = document.getElementById("osc");
+  var g2d = osc && osc.getContext ? osc.getContext("2d") : null, oscW = 0, oscH = 0, oscN = 0, oscPh = 0, temp = 14, tempAt = 0, tempTxtAt = 0;
+  function drawExtra(k) {
+    var now = performance.now(), live = state === "play" || state === "boot";
+    if (now - tempAt > 250) {
+      tempAt = now;
+      var want = live ? 14 - 11 * k + (Math.random() - 0.5) * (0.3 + 0.8 * k) : 14 + (Math.random() - 0.5) * 0.2;
+      temp += (want - temp) * 0.35;
+      tfill.style.transform = "scaleY(" + clamp((temp - 1) / 16, 0.04, 1).toFixed(3) + ")";
+      if (now - tempTxtAt > 600) { tempTxtAt = now; tval.textContent = state === "intro" ? "--" : temp.toFixed(1).replace(".", ","); }
+    }
+    if (!g2d) return;
+    if (!(oscN++ % 60)) {
+      var dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(osc.clientWidth * dpr), h = Math.round(osc.clientHeight * dpr);
+      if (w && (w !== oscW || h !== oscH)) { osc.width = oscW = w; osc.height = oscH = h; }
+    }
+    if (!oscW) return;
+    g2d.fillStyle = "rgba(6,9,8,.4)"; g2d.fillRect(0, 0, oscW, oscH);
+    var mid = oscH / 2, amp = oscH * 0.36, pts = 56, boot = state === "boot";
+    oscPh += 0.08 + 0.3 * k;
+    g2d.beginPath();
+    for (var i = 0; i <= pts; i++) {
+      var x = i / pts, y;
+      if (boot) y = Math.sin(x * 18 - oscPh * 2) * amp * 0.8;
+      else if (state === "play") y = Math.sin(x * (5 + 4 * k) * Math.PI - oscPh) * amp * (0.15 + 0.85 * k) + (Math.random() - 0.5) * amp * 1.3 * (1 - k * 0.9);
+      else y = (Math.random() - 0.5) * amp * (state === "pick" ? 0.35 : 0.12);
+      g2d[i ? "lineTo" : "moveTo"](x * oscW, mid + y);
+    }
+    g2d.lineWidth = 1.2 * Math.min(window.devicePixelRatio || 1, 2); g2d.lineJoin = "round";
+    g2d.strokeStyle = k > 0.75 ? "rgba(214,120,100,.9)" : "rgba(185,214,200,.85)"; g2d.stroke();
   }
   function heartLoop() {
     var next = 400;
@@ -1030,6 +1444,12 @@
   });
   document.addEventListener("fullscreenchange", function () { setToggle(fsBtn, !document.fullscreenElement); });
   if (!fsBtn.hidden) $(".ctl").style.gridTemplateColumns = "2fr 1fr 1fr 1fr 1fr"; else $(".ctl").style.gridTemplateColumns = "2fr 1fr 1fr 1fr";
+
+  /* panel nastavení: otevře ozubené kolečko, zavře ťuknutí mimo nebo volba */
+  var sheet = $("#sheet"), menuBtn = $("#menu");
+  function openSheet(on) { sheet.hidden = !on; menuBtn.setAttribute("aria-expanded", on ? "true" : "false"); }
+  menuBtn.addEventListener("click", function () { openSheet(sheet.hidden); });
+  sheet.addEventListener("click", function (e) { if (e.target === sheet || e.target.closest(".btn")) openSheet(false); });
 
   frame(); callLoop(); heartLoop(); clickLoop();
 })();
