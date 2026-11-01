@@ -8,7 +8,7 @@
 <title>Detektor duchů</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@400;500;600&display=swap">
 <style>
-  /* Layout: one screen, no scrolling. Intro overlay first. In play: title/counter/timer on top, radar with arrow fills the space, meter and spoken line, then controls. */
+  /* Layout: one screen, no scrolling. Intro overlay first. In play: title/counter/timer on top, radar with the hunted ghost fills the space, meter and spoken line, then controls. */
   :root {
     --bg: #0d0f17;
     --panel: #151927;
@@ -65,8 +65,11 @@
   .me { position: absolute; left: 50%; top: 50%; width: 3%; aspect-ratio: 1; margin: -1.5% 0 0 -1.5%; border-radius: 50%; background: var(--ecto); }
   .dot { position: absolute; width: 6%; aspect-ratio: 1; margin: -3% 0 0 -3%; border-radius: 50%; background: var(--amber); opacity: .5; transition: left .25s linear, top .25s linear, opacity .3s; }
   .dot.near { background: var(--hot); box-shadow: 0 0 14px var(--hot); opacity: 1; }
-  .arrow { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; transition: opacity .3s; }
-  .arrow svg { width: 34%; height: 34%; color: var(--hot); transform: rotate(var(--ang, 0deg)); transition: transform .12s linear; filter: drop-shadow(0 0 12px var(--hot)); }
+  .dot.tgh { width: 17%; height: auto; aspect-ratio: 120 / 150; margin: -10.6% 0 0 -8.5%; border-radius: 0; background: none; opacity: 1; }
+  .dot.tgh svg { width: 100%; height: 100%; filter: drop-shadow(0 0 10px var(--glow, #fff)); }
+  .dot.tgh.here svg { animation: pulse .8s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.25); } }
+  .dot:not(.tgh) { display: none; }
   .north { position: absolute; top: 3%; left: 50%; transform: translateX(-50%); font: 500 12px/1 var(--display); letter-spacing: .14em; color: var(--dim); }
 
   .info { display: flex; flex-direction: column; gap: 8px; }
@@ -131,13 +134,13 @@
   .overlay-in { max-width: 560px; width: 100%; margin: auto; display: flex; flex-direction: column; gap: 14px; }
   .overlay h2 { margin: 0; font: 600 28px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; text-wrap: balance; }
   .overlay p { margin: 0; color: var(--dim); }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .gcard {
     display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px 10px;
     border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--fg);
   }
-  .gcard svg { width: 72px; height: 84px; }
-  .gcard b { font: 500 19px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
+  .gcard svg { width: 64px; height: 80px; }
+  .gcard b { font: 500 17px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
   .gcard span { font: 400 13px/1.2 var(--mono); color: var(--dim); }
   .gcard:not(:disabled):active { transform: scale(.97); }
   .gcard:disabled { cursor: default; opacity: .55; }
@@ -161,7 +164,7 @@
   .troupe svg { width: 100%; height: auto; }
 
   @media (max-height: 640px) { .say { min-height: 3em; font-size: 15px; } .leds { height: 30px; } .value { font-size: 28px; } }
-  @media (prefers-reduced-motion: reduce) { .sweep, .float, .ghost .eyes, .stage .pop, .spark { animation: none; } .led, .dot, .arrow svg { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .sweep, .float, .ghost .eyes, .stage .pop, .spark { animation: none; } .led, .dot { transition: none; } .dot.tgh.here svg { animation: none; } }
 </style>
 </head>
 <body>
@@ -177,7 +180,6 @@
       <div class="sweep"></div>
       <div class="north" id="north">N</div>
       <div class="me"></div>
-      <div class="arrow" id="arrow"><svg viewBox="0 0 24 24" aria-label="Směr k nejbližšímu duchovi"><path fill="currentColor" d="M12 2 L20 14 H14 V22 H10 V14 H4 Z"/></svg></div>
     </div>
   </div>
 
@@ -206,7 +208,7 @@
 <section class="intro" id="intro">
   <div class="intro-in">
     <h2>Lovci duchů</h2>
-    <p>Telefon ti po stisknutí tlačítka rozmístí pět duchů do 50 metrů kolem tebe. Jdi podle šipky a u každého stiskni Chyť ducha.</p>
+    <p>Telefon ti po stisknutí tlačítka rozmístí tři duchy do 50 metrů kolem tebe. Vyber si, kterého půjdeš hledat, a jdi za ním podle radaru. Poslouchej, jak houká. U ducha stiskni Chyť ducha.</p>
     <div class="rules safe"><b>Bezpečí</b><span>Hrajte jen na bezpečném místě, daleko od silnice. Domluvte si hranice hřiště a čas návratu.</span></div>
     <div class="rules"><b>Potřebuješ</b><span>Zapnutou polohu (GPS) a povolit kompas. Venku pod širým nebem to funguje nejlépe.</span></div>
     <div class="btns">
@@ -221,7 +223,7 @@
 <section class="overlay" id="picker" hidden>
   <div class="overlay-in">
     <h2>Kterého ducha jdeš hledat?</h2>
-    <p id="pickhint">Ťukni na ducha. Šipka tě pak dovede k němu.</p>
+    <p id="pickhint">Ťukni na ducha. Na radaru pak uvidíš, kde je, a uslyšíš ho houkat.</p>
     <div class="cards" id="cards"></div>
   </div>
 </section>
@@ -242,15 +244,15 @@
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var rnd = function (a, b) { return a + Math.random() * (b - a); };
   var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
-  var N = 5, SAVE_KEY = "lovci-duchu-gps";
+  var N = 3, SAVE_KEY = "lovci-duchu-gps-3";
 
   /* ---------- Duchové ---------- */
   var CHARS = [
-    { name: "Kvído", body: "#eef3ff", glow: "#a9c4ff", acc: "hat", line: "Bú! Jsem Kvído. Tak tohle bylo rychlé, ty jsi ale lovec!" },
-    { name: "Bublina", body: "#ffd3ea", glow: "#ff8fc8", acc: "bow", line: "Hihi, mám tě! Jsem Bublina a schovávám se nejradši ze všech." },
-    { name: "Fanda", body: "#ccfbe6", glow: "#5fe3a8", acc: "glasses", line: "Jsem Fanda. Přes ty brýle jsem tě vůbec neviděl přicházet!" },
-    { name: "Žužu", body: "#fff1ad", glow: "#ffc23d", acc: "crown", line: "Já jsem Žužu, královna duchů. Uznávám, tohle se ti povedlo!" },
-    { name: "Mlžák", body: "#ddd0ff", glow: "#a98bff", acc: "scarf", line: "Brrr, jsem Mlžák. Tady venku je mi zima. Vezmeš mě s sebou?" }
+    { name: "Kvído", body: "#eef3ff", glow: "#a9c4ff", acc: "hat", hoo: 330, line: "Bú! Jsem Kvído. Tak tohle bylo rychlé, ty jsi ale lovec!" },
+    { name: "Bublina", body: "#ffd3ea", glow: "#ff8fc8", acc: "bow", hoo: 520, line: "Hihi, mám tě! Jsem Bublina a schovávám se nejradši ze všech." },
+    { name: "Fanda", body: "#ccfbe6", glow: "#5fe3a8", acc: "glasses", hoo: 400, line: "Jsem Fanda. Přes ty brýle jsem tě vůbec neviděl přicházet!" },
+    { name: "Žužu", body: "#fff1ad", glow: "#ffc23d", acc: "crown", hoo: 460, line: "Já jsem Žužu, královna duchů. Uznávám, tohle se ti povedlo!" },
+    { name: "Mlžák", body: "#ddd0ff", glow: "#a98bff", acc: "scarf", hoo: 280, line: "Brrr, jsem Mlžák. Tady venku je mi zima. Vezmeš mě s sebou?" }
   ];
   function ghostSVG(i, cls) {
     var c = CHARS[i], a = "";
@@ -325,10 +327,11 @@
     return { lat: p.lat + d * Math.cos(br) / 111320, lon: p.lon + d * Math.sin(br) / (111320 * Math.cos(rad(p.lat))) };
   }
   function makeGhosts(o) {
-    var base = rnd(0, 360), g = [];
+    var base = rnd(0, 360), g = [], pool = [0, 1, 2, 3, 4];
+    for (var k = pool.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)), x = pool[k]; pool[k] = pool[j]; pool[j] = x; }
     for (var i = 0; i < N; i++) {
       var p = offset(o, rnd(15, 50), (base + i * (360 / N) + rnd(-20, 20) + 360) % 360);
-      g.push({ lat: p.lat, lon: p.lon, caught: false });
+      g.push({ lat: p.lat, lon: p.lon, caught: false, c: pool[i] });
     }
     return g;
   }
@@ -341,7 +344,7 @@
   var heading = null, headingAt = 0, absSeen = false, listening = false, gpsHeading = null, gpsHeadAt = 0;
 
   var intro = $("#intro"), msg = $("#msg"), beginBtn = $("#begin"), resumeBtn = $("#resume"), testBtn = $("#testbtn");
-  var radar = $("#radar"), arrowEl = $("#arrow"), northEl = $("#north"), sayEl = $("#say"), hintEl = $("#dirhint");
+  var radar = $("#radar"), northEl = $("#north"), sayEl = $("#say"), hintEl = $("#dirhint");
   var valueEl = $("#value"), stateEl = $("#state"), counterEl = $("#counter"), timeEl = $("#time"), catchBtn = $("#catch");
   var leds = Array.prototype.slice.call(document.querySelectorAll(".led"));
   var dots = [];
@@ -428,7 +431,7 @@
     finishedAt = 0; intro.hidden = true; radar.classList.remove("off");
     lastBand = ""; buildDots(); save(); wake(true);
     if (target !== null) { chooseTarget(target, "Pokračujeme. "); return; }
-    var t = savedGame ? "Pokračujeme. Vyber, kterého ducha půjdeš hledat." : "Pět duchů se schovalo do padesáti metrů kolem tebe. Vyber, kterého půjdeš hledat.";
+    var t = savedGame ? "Pokračujeme. Vyber, kterého ducha půjdeš hledat." : "Tři duchové se schovali do padesáti metrů kolem tebe. Vyber, kterého půjdeš hledat.";
     showPicker(); speak(t, true);
   }
   function showPicker() {
@@ -438,19 +441,23 @@
       var b = document.createElement("button");
       b.type = "button"; b.className = "gcard"; b.disabled = g.caught;
       var sub = g.caught ? "Chycen ✓" : pos ? "asi " + Math.max(5, Math.round(dist(pos, g) / 5) * 5) + " m" : "";
-      b.innerHTML = ghostSVG(i, g.caught ? "" : "float") + "<b>" + CHARS[i].name + "</b><span>" + sub + "</span>";
+      b.innerHTML = ghostSVG(g.c, g.caught ? "" : "float") + "<b>" + CHARS[g.c].name + "</b><span>" + sub + "</span>";
       if (!g.caught) b.firstChild.style.animationDelay = (-i * 0.5) + "s";
       b.addEventListener("click", function () { chooseTarget(i, ""); });
       cardsEl.appendChild(b);
     });
     var caught = ghosts.filter(function (g) { return g.caught; }).length;
-    $("#pickhint").textContent = caught ? "Máš chycené " + caught + " z " + N + ". Ťukni na dalšího ducha." : "Ťukni na ducha. Šipka tě pak dovede k němu.";
+    $("#pickhint").textContent = caught ? "Máš chycené " + caught + " z " + N + ". Ťukni na dalšího ducha." : "Ťukni na ducha. Na radaru pak uvidíš, kde je, a uslyšíš ho houkat.";
   }
   function chooseTarget(i, prefix) {
     target = i; state = "play"; picker.hidden = true; save();
     var b0 = nearest(); lastBand = b0 ? bandOf(b0.d) : "";
-    titleEl.innerHTML = ghostSVG(i) + "<span>" + CHARS[i].name + "</span>";
-    var t = prefix + "Hledáš ducha jménem " + CHARS[i].name + ". Jdi za šipkou.";
+    var c = CHARS[ghosts[i].c];
+    titleEl.innerHTML = ghostSVG(ghosts[i].c) + "<span>" + c.name + "</span>";
+    radar.style.setProperty("--glow", c.glow);
+    dots.forEach(function (el, k) { el.innerHTML = k === i ? ghostSVG(ghosts[k].c) : ""; el.className = "dot" + (k === i ? " tgh" : ""); });
+    lastDir = ""; nextHoo = performance.now() + 2500;
+    var t = prefix + "Hledáš ducha jménem " + c.name + ". Na radaru vidíš, kde je. Poslouchej, jak houká.";
     sayEl.textContent = t; speak(t, true);
   }
   function jingle() {
@@ -467,11 +474,11 @@
     }
   }
   function showReveal(i) {
-    state = "reveal"; var c = CHARS[i];
+    state = "reveal"; var c = CHARS[ghosts[i].c];
     revealEl.style.setProperty("--glow", c.glow); revealEl.hidden = false;
     $("#boo").textContent = "Bú!";
     stageEl.className = "stage";
-    stageEl.innerHTML = '<div class="pop">' + ghostSVG(i, "float") + "</div>"; sparks();
+    stageEl.innerHTML = '<div class="pop">' + ghostSVG(ghosts[i].c, "float") + "</div>"; sparks();
     $("#rname").textContent = c.name + " je chycený!";
     $("#rquote").textContent = "„" + c.line + "“";
     var left = ghosts.filter(function (g) { return !g.caught; }).length;
@@ -514,9 +521,9 @@
     revealEl.style.setProperty("--glow", "#5fe3cf"); revealEl.hidden = false;
     $("#boo").textContent = "Hurá!";
     stageEl.className = "troupe";
-    stageEl.innerHTML = CHARS.map(function (c, i) { return '<div class="pop" style="animation-delay:' + (i * 0.15) + 's">' + ghostSVG(i, "float") + "</div>"; }).join("");
+    stageEl.innerHTML = ghosts.map(function (g, i) { return '<div class="pop" style="animation-delay:' + (i * 0.15) + 's">' + ghostSVG(g.c, "float") + "</div>"; }).join("");
     Array.prototype.forEach.call(stageEl.querySelectorAll(".float"), function (el, i) { el.style.animationDelay = (-i * 0.4) + "s"; });
-    $("#rname").textContent = "Všech " + N + " duchů je chyceno!";
+    $("#rname").textContent = "Všichni tři duchové jsou chyceni!";
     $("#rquote").textContent = "Tvůj čas: " + mmss((finishedAt - startedAt) / 1000) + ". Duchové se ti klaní.";
     rnext.textContent = "Nová hra"; rnext.onclick = toIntro;
   }
@@ -549,8 +556,8 @@
     here: ["Duch je přímo tady!", "Duch je přímo tady! Stiskni Chyť ducha."],
     close: ["Skoro tam", "Skoro tam! Hledej kolem sebe."],
     strong: ["Silný signál", "Silný signál! Jsi blízko."],
-    weak: ["Slabý signál", "Slabý signál. Jdi směrem šipky."],
-    cold: ["Studený signál", "Studený signál. Jdi směrem šipky."]
+    weak: ["Slabý signál", "Slabý signál. Jdi k duchovi na radaru."],
+    cold: ["Studený signál", "Studený signál. Jdi k duchovi na radaru."]
   };
 
   function frame() {
@@ -561,9 +568,7 @@
     if (best) {
       var d = best.d, br = bearing(pos, best.g);
       var ang = br - (hd.h === null ? 0 : hd.h);
-      var dd = (((ang - shownAng) % 360) + 540) % 360 - 180; shownAng += dd;
-      arrowEl.style.setProperty("--ang", shownAng + "deg");
-      arrowEl.style.opacity = d <= catchR() ? "0.35" : "1";
+      sayDirection(hd.h === null ? null : ang, d);
       northEl.style.opacity = hd.h === null ? "1" : "0.4";
       tgt = clamp(5 * (1 - (d - 4) / 46), 0, 5);
       valueEl.innerHTML = Math.round(d) + "<small>m</small>";
@@ -572,21 +577,19 @@
       stateEl.textContent = bt[0]; stateEl.className = "state" + (band === "here" || band === "close" ? " alert" : band === "strong" ? " warn" : "");
       if (band !== lastBand) { lastBand = band; sayEl.textContent = bt[1]; speak(bt[1]); }
       catchBtn.disabled = band !== "here";
-      /* radar: všechny nechycené duchy, měřítko 60 m */
-      ghosts.forEach(function (g, i) {
-        var el = dots[i]; if (!el) return;
-        if (g.caught) { el.style.opacity = "0"; return; }
-        var gd = dist(pos, g), rel = bearing(pos, g) - (hd.h === null ? 0 : hd.h), r = Math.min(gd, 60) / 60 * 46;
-        el.style.left = (50 + r * Math.sin(rad(rel))) + "%"; el.style.top = (50 - r * Math.cos(rad(rel))) + "%";
-        el.className = "dot" + (i === best.i ? " near" : ""); el.style.opacity = "";
-      });
+      /* radar: jen hledaný duch, měřítko 60 m, ve středu jsi ty */
+      var el = dots[best.i];
+      if (el) {
+        var r = Math.min(d, 60) / 60 * 40;
+        el.style.left = (50 + r * Math.sin(rad(ang))) + "%"; el.style.top = (50 - r * Math.cos(rad(ang))) + "%";
+        el.classList.toggle("here", band === "here");
+      }
       var far = origin ? dist(pos, origin) : 0;
       hintEl.textContent = "GPS ±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " (nahoře je sever)" : "") + (far > 120 ? " · Jsi daleko od startu, vrať se." : "");
     } else if (state === "done") {
       valueEl.innerHTML = "0<small>m</small>"; stateEl.textContent = "Hotovo"; stateEl.className = "state";
-      arrowEl.style.opacity = "0"; hintEl.textContent = "";
+      hintEl.textContent = "";
     } else {
-      arrowEl.style.opacity = "0";
       if (state === "intro") { valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Čeká na start"; stateEl.className = "state"; }
     }
     level += (tgt - level) * 0.1;
@@ -596,6 +599,41 @@
       counterEl.textContent = (N - left) + "/" + N;
       timeEl.textContent = mmss(((state === "done" ? finishedAt : Date.now()) - startedAt) / 1000);
     }
+  }
+  /* Hlasové pokyny ke směru (jen s kompasem) */
+  var lastDir = "", lastDirAt = 0;
+  function sayDirection(ang, d) {
+    if (ang === null || d <= catchR()) return;
+    var a = ((ang % 360) + 360) % 360, dir = a < 35 || a > 325 ? "rovně před tebou" : a <= 145 ? "vpravo" : a < 215 ? "za tebou" : "vlevo";
+    var now = performance.now();
+    if (dir === lastDir || now - lastDirAt < 6000) return;
+    lastDir = dir; lastDirAt = now;
+    var t = "Duch je " + dir + ".";
+    speak(t);
+  }
+  /* Duch houká z reproduktoru: čím blíž, tím hlasitěji a častěji */
+  var nextHoo = 0;
+  function hoo(f, vol) {
+    if (!soundOn) return;
+    var c = audio(); if (!c) return;
+    var n = c.currentTime, o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    o.type = "sine"; lfo.frequency.value = 6; lg.gain.value = f * 0.04;
+    lfo.connect(lg); lg.connect(o.frequency);
+    o.frequency.setValueAtTime(f * 0.9, n); o.frequency.linearRampToValueAtTime(f * 1.25, n + 0.35);
+    o.frequency.setValueAtTime(f * 1.2, n + 0.5); o.frequency.exponentialRampToValueAtTime(f * 0.7, n + 1.3);
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.12);
+    g.gain.setValueAtTime(vol, n + 0.4); g.gain.exponentialRampToValueAtTime(vol * 0.3, n + 0.5);
+    g.gain.exponentialRampToValueAtTime(vol, n + 0.65); g.gain.exponentialRampToValueAtTime(0.0001, n + 1.4);
+    o.connect(g); g.connect(c.destination); o.start(n); lfo.start(n); o.stop(n + 1.45); lfo.stop(n + 1.45);
+  }
+  function hooLoop() {
+    var b = state === "play" ? nearest() : null, now = performance.now();
+    if (b && now >= nextHoo && b.d > catchR()) {
+      var k = clamp(1 - (b.d - 5) / 55, 0, 1);
+      hoo(CHARS[b.g.c].hoo, 0.05 + 0.3 * k);
+      nextHoo = now + 6500 - 4000 * k;
+    }
+    setTimeout(hooLoop, 250);
   }
   function beepLoop() {
     var next = 300;
@@ -628,7 +666,7 @@
   });
   document.addEventListener("fullscreenchange", function () { fsBtn.textContent = document.fullscreenElement ? "Zavřít celou" : "Celá obrazovka"; });
 
-  frame(); beepLoop();
+  frame(); beepLoop(); hooLoop();
 })();
 </script>
 </body>
