@@ -346,6 +346,15 @@
   .reveal .btn { width: 100%; max-width: 340px; padding: 18px 12px; opacity: 0; animation: rise 1s ease-out 1.8s forwards; }
   .reveal .btn .ms { font-size: 40px; }
   .time { font: 400 15px/1 var(--mono); color: var(--dim); letter-spacing: .08em; }
+  /* fotka s duchem po nálezu */
+  .photo { margin: 0; }
+  .photo img { display: block; width: min(86vw, 420px); max-height: 44vh; object-fit: contain; border-radius: 6px; box-shadow: 0 0 0 1px rgba(216, 214, 203, .14), 0 14px 40px rgba(0, 0, 0, .75); animation: develop 2.4s ease-out both; }
+  @keyframes develop { from { opacity: 0; filter: brightness(2.2) blur(6px); } to { opacity: 1; filter: none; } }
+  .photobtns { display: flex; gap: 10px; justify-content: center; opacity: 0; animation: rise 1s ease-out 1.6s forwards; }
+  .reveal .photobtns .btn { width: auto; min-width: 92px; padding: 14px 22px; opacity: 1; animation: none; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; width: min(86vw, 420px); margin-top: 12px; }
+  .gallery img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 1px rgba(216, 214, 203, .14); }
+  @media (prefers-reduced-motion: reduce) { .photo img, .photobtns { animation: none !important; opacity: 1; } }
 
   /* Rituál před nálezem: kruh prstem, zaklínadlo nahlas, nebo klid */
   .ritual .overlay-in { align-items: center; text-align: center; gap: 18px; }
@@ -527,6 +536,12 @@
     <div id="stage"></div>
     <h2 id="rname"></h2>
     <p class="quote" id="rquote"></p>
+    <figure class="photo" id="photo" hidden><img id="photoimg" alt="Fotka místa, kde jste našli ducha"></figure>
+    <div class="photobtns" id="photobtns">
+      <button class="btn" id="snap" type="button" aria-label="Vyfotit místo, kde je duch" title="Vyfotit"><span class="ms" aria-hidden="true">photo_camera</span></button>
+      <button class="btn" id="sharephoto" type="button" hidden aria-label="Uložit nebo poslat fotku" title="Uložit nebo poslat"><span class="ms" aria-hidden="true">ios_share</span></button>
+    </div>
+    <input type="file" id="cam" accept="image/*" capture="environment" hidden>
     <div class="score" id="score" aria-hidden="true"></div>
     <button class="btn primary" id="rnext" type="button" aria-label="Dál" title="Dál"></button>
   </div>
@@ -917,19 +932,19 @@
     if (fresh) return Promise.resolve(parseWalkArea(o, fresh));
     var c = o.lat.toFixed(6) + "," + o.lon.toFixed(6), A = function (r) { return "(around:" + r + "," + c + ")"; };
     /* jen výřez kolem hráče (obrysy velkých ploch jako řeka se oříznou), ať je odpověď malá a rychlá */
-    var sw = offset(offset(o, 175, 180), 175, 270), ne = offset(offset(o, 175, 0), 175, 90);
+    var sw = offset(offset(o, 110, 180), 110, 270), ne = offset(offset(o, 110, 0), 110, 90); /* stačí malý výřez: duchové jsou do 70 m */
     var bb = sw.lat.toFixed(6) + "," + sw.lon.toFixed(6) + "," + ne.lat.toFixed(6) + "," + ne.lon.toFixed(6);
     var q = "[out:json][timeout:25];(" +
-      "way" + A(110) + "[highway];" +
-      "way" + A(110) + "[building];relation" + A(110) + "[building];" +
-      "way" + A(130) + "[natural=water];relation" + A(130) + "[natural=water];" +
-      "way" + A(130) + "[waterway];" +
-      "way" + A(110) + "[landuse~\"^(railway|construction|military|landfill|quarry|brownfield|allotments|farmyard|garages)$\"];" +
-      "relation" + A(110) + "[landuse~\"^(railway|construction|military|allotments|farmyard|garages)$\"];" +
-      "way" + A(110) + "[amenity~\"^(school|kindergarten|prison|swimming_pool)$\"];relation" + A(110) + "[amenity~\"^(school|kindergarten|prison)$\"];" +
-      "way" + A(110) + "[leisure~\"^(garden|swimming_pool)$\"];" +
-      "way" + A(100) + "[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
-      "node" + A(110) + "[barrier~\"^(gate|lift_gate|swing_gate|sliding_gate|turnstile|full-height_turnstile)$\"];" +
+      "way" + A(85) + "[highway];" +
+      "way" + A(85) + "[building];relation" + A(85) + "[building];" +
+      "way" + A(85) + "[natural=water];relation" + A(85) + "[natural=water];" +
+      "way" + A(85) + "[waterway];" +
+      "way" + A(85) + "[landuse~\"^(railway|construction|military|landfill|quarry|brownfield|allotments|farmyard|garages)$\"];" +
+      "relation" + A(85) + "[landuse~\"^(railway|construction|military|allotments|farmyard|garages)$\"];" +
+      "way" + A(85) + "[amenity~\"^(school|kindergarten|prison|swimming_pool)$\"];relation" + A(85) + "[amenity~\"^(school|kindergarten|prison)$\"];" +
+      "way" + A(85) + "[leisure~\"^(garden|swimming_pool)$\"];" +
+      "way" + A(85) + "[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
+      "node" + A(85) + "[barrier~\"^(gate|lift_gate|swing_gate|sliding_gate|turnstile|full-height_turnstile)$\"];" +
       ");out tags geom(" + bb + ");";
     return overpass(q, 25000).then(function (els) {
       try { localStorage.setItem(MAP_KEY, JSON.stringify({ lat: o.lat, lon: o.lon, at: Date.now(), els: els })); } catch (e) {}
@@ -1033,6 +1048,16 @@
     });
     if (!best) return null;
     return function (w, a, b) { return walkable(w) && find(nodeKey(a)) === best.r && find(nodeKey(b)) === best.r; };
+  }
+  /* Mapa okolí se stahuje jen jednou pro jedno místo: předem na úvodu, od prvního zaměření, a start hry ji převezme. */
+  var mapJob = null;
+  function areaFor(o) {
+    if (mapJob && dist(mapJob.o, o) < 35) return mapJob.p;
+    var job = { o: o };
+    job.p = osmWalkArea(o).catch(function () { return null; });
+    job.p.then(function (a) { if (!a && mapJob === job) mapJob = null; }); /* nepovedlo se: příště zkusit znovu */
+    mapJob = job;
+    return job.p;
   }
   function closedRing(pts) { var a = pts[0], b = pts[pts.length - 1]; return pts.length > 3 && a.lat === b.lat && a.lon === b.lon; }
   function inPoly(p, poly) {
@@ -1307,7 +1332,8 @@
     else if (dist(lastFix, pos) > Math.max(5, acc * 0.6)) { trackHeading = bearing(lastFix, pos); trackAt = performance.now(); lastFix = pos; }
     if (state === "locating") {
       msg.textContent = "Hledám tě… přesnost " + Math.round(acc) + " m. Chvilku počkej.";
-      if (acc <= (mode === "car" ? 40 : 25) || performance.now() - t0Loc > 12000) startGame(pos);
+      if (mode === "walk" && !resumeData && acc <= 150) areaFor(pos); /* mapa se stahuje, zatímco se poloha zpřesňuje */
+      if (acc <= (mode === "car" ? 60 : 40) || performance.now() - t0Loc > 6000) startGame(pos);
     }
   }
   function onPosErr(e) {
@@ -1340,7 +1366,7 @@
     spawnedAt = savedGame && savedGame.spawnedAt || 0; startD = savedGame && savedGame.startD || 0;
     target = savedGame && typeof savedGame.target === "number" && ghosts[savedGame.target] && !ghosts[savedGame.target].caught && ghosts[savedGame.target].lat != null ? savedGame.target : null;
     finishedAt = 0; intro.hidden = true; radar.classList.remove("off"); pathPts = [];
-    lastBand = ""; shownCandles = ""; clues = {}; buildDots(); drawCandles(); save(); wake(true);
+    lastBand = ""; shownCandles = ""; clues = {}; photos = []; buildDots(); drawCandles(); save(); wake(true);
     /* kalibrace po zapnutí, jako u skutečného přístroje; mezitím si stáhne cesty z OpenStreetMap
        a strašidla posadí na chodníky a pěšiny (když se to nepovede, zůstane náhodné rozmístění) */
     state = "boot"; radar.classList.add("boot"); powerUp();
@@ -1348,7 +1374,7 @@
     var gen = ++bootGen, mine = ghosts;
     /* pěšky strašidla smějí jen na chodníky a cesty venku; bez mapy okolí se nehraje (kromě zkoušky doma) */
     var loadArea = function () {
-      return Promise.race([osmWalkArea(origin).catch(function () { return null; }), new Promise(function (r) { setTimeout(function () { r(null); }, 60000); })]);
+      return Promise.race([areaFor(origin), new Promise(function (r) { setTimeout(function () { r(null); }, 60000); })]);
     };
     var mapFail = false, failWhy = "map";
     var placing = mode === "walk" && !savedGame
@@ -1360,14 +1386,16 @@
         })
       : Promise.resolve(null);
     if (mode === "walk" && savedGame) loadArea().then(function (area) { if (area && gen === bootGen) pathPts = samplePaths(origin, area.ways, 12, 55, area); });
-    setTimeout(function () { if (gen === bootGen && state === "boot" && mode === "walk") sayEl.textContent = "Hledám místa venku, kam se strašidla mohla schovat…"; }, 4000);
-    setTimeout(function () { if (gen === bootGen && state === "boot" && mode === "walk") { var t = "Mapa okolí se načítá pomalu. Ještě chvilku vydrž."; sayEl.textContent = t; speak(t); } }, 15000);
+    /* když se čeká na mapu, děti zatím vyladí kompas: osmička ve vzduchu opravdu pomáhá */
+    setTimeout(function () { if (gen === bootGen && state === "boot") { var t = "Zatím vylaď kompas. Zamávej detektorem ve vzduchu do velké osmičky."; sayEl.textContent = t; speak(t); } }, 2600);
+    setTimeout(function () { if (gen === bootGen && state === "boot" && mode === "walk") { var t = "Hledám místa venku, kam se strašidla mohla schovat. Ještě chvilku mávej."; sayEl.textContent = t; speak(t); } }, 9000);
+    setTimeout(function () { if (gen === bootGen && state === "boot" && mode === "walk") { var t = "Mapa okolí se načítá pomalu. Ještě chvilku vydrž."; sayEl.textContent = t; speak(t); } }, 18000);
     Promise.all([placing.then(function (pts) {
       if (gen !== bootGen || ghosts !== mine) return;
       if (!pts) { if (mode === "walk" && !savedGame && !test) mapFail = true; return; }
       pts.forEach(function (p, k) { ghosts[k].lat = p.lat; ghosts[k].lon = p.lon; });
       save();
-    }), new Promise(function (r) { setTimeout(r, 2800); })]).then(function () {
+    }), new Promise(function (r) { setTimeout(r, 1800); })]).then(function () {
       if (gen !== bootGen || state !== "boot") return;
       if (mapFail) {
         clearSave(); toIntro();
@@ -1799,7 +1827,8 @@
   function showReveal(i) {
     cancelLater(); state = "reveal"; var c = CHARS[ghosts[i].c], zom = c.type === "zombie";
     revealEl.hidden = false; restartAnims(revealEl);
-    stageEl.innerHTML = eyesSVG(zom);
+    stageEl.innerHTML = eyesSVG(zom); stageEl.hidden = false; revealIdx = i;
+    $("#photo").hidden = true; $("#sharephoto").hidden = true; $("#photobtns").hidden = false;
     $("#rname").textContent = "Nalezeno.";
     var clue = clues[i] || anyClue(mode === "car" ? CLUE_CAR : CLUE_ANY), spoken = "Nalezeno. " + clue;
     /* auto: scéna podle místa, u kterého strašidlo sedělo */
@@ -1823,8 +1852,114 @@
     after(900, function () { whisper(0.16, 2.2); });
     after(1500, function () { bell(147, 0.14, 5); });
     after(2300, function () { speak(spoken, true); });
+    after(2500, function () { speak("Teď vyfoť místo, kde jste ho našli. Možná ho na fotce uvidíš."); });
     vibe(zom ? [400, 120, 400] : [120, 90, 120]);
   }
+  /* ---------- Fotka s duchem ----------
+     Děti vyfotí místo nálezu. Ve fotce se najde nejtmavší místo (stín) a duch se do něj vloží jako jeho opak:
+     světlejší, rozmazaná, průsvitná postava se slabě naznačenýma očima. Celá fotka dostane noční tón a zrno. */
+  var photos = [], revealIdx = -1, lastPhoto = null;
+  function ghostLabel(i) {
+    var g = ghosts[i] || {};
+    if (mode === "car" && g.place && g.place.name0) return g.place.name0;
+    return mode === "walk" && g.t ? TYPE_NAME[g.t] : "Strašidlo";
+  }
+  function hauntPhoto(img, label) {
+    var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height, sc = Math.min(1, 1600 / Math.max(iw, ih));
+    var W = Math.max(1, Math.round(iw * sc)), H = Math.max(1, Math.round(ih * sc));
+    var cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    var c = cv.getContext("2d"); c.drawImage(img, 0, 0, W, H);
+    var im = c.getImageData(0, 0, W, H), d = im.data;
+    /* 1) nejtmavší místo ve střední části fotky (stín), mírně přednost středu */
+    var G = 10, best = null;
+    for (var gy = 2; gy < G - 1; gy++) for (var gx = 1; gx < G - 1; gx++) {
+      var x0 = Math.floor(gx * W / G), x1 = Math.floor((gx + 1) * W / G), y0 = Math.floor(gy * H / G), y1 = Math.floor((gy + 1) * H / G), sum = 0, n = 0;
+      for (var y = y0; y < y1; y += 4) for (var x = x0; x < x1; x += 4) { var k = (y * W + x) * 4; sum += 0.3 * d[k] + 0.59 * d[k + 1] + 0.11 * d[k + 2]; n++; }
+      var score = sum / Math.max(1, n) + Math.abs(gx + 0.5 - G / 2) * 5 + Math.abs(gy + 0.5 - G * 0.55) * 3;
+      if (!best || score < best.s) best = { s: score, x: (gx + 0.5) * W / G, y: (gy + 0.5) * H / G };
+    }
+    /* 2) rozmazaná kopie (zmenšit a zvětšit) */
+    var sm = document.createElement("canvas"); sm.width = Math.max(1, Math.round(W / 16)); sm.height = Math.max(1, Math.round(H / 16));
+    sm.getContext("2d").drawImage(cv, 0, 0, sm.width, sm.height);
+    var bl = document.createElement("canvas"); bl.width = W; bl.height = H; var bc = bl.getContext("2d"); bc.imageSmoothingEnabled = true; bc.drawImage(sm, 0, 0, W, H);
+    var blur = bc.getImageData(0, 0, W, H).data;
+    /* 3) maska ducha: hlava, tělo, vlnitý lem; měkké okraje, dole se rozplývá */
+    var gh = Math.min(W, H) * 0.56, gw = gh * 0.6, r0 = gw / 2, cx = clamp(best.x, gw, W - gw), top = clamp(best.y - gh * 0.45, gh * 0.04, Math.max(gh * 0.04, H - gh * 0.95)), tilt = rnd(-0.09, 0.09);
+    /* maska se kreslí v malém rozlišení a zvětší: okraje jsou pak měkké jako mlha */
+    var DS = 6, ms = document.createElement("canvas"); ms.width = Math.ceil(W / DS); ms.height = Math.ceil(H / DS); var m = ms.getContext("2d");
+    m.scale(1 / DS, 1 / DS);
+    var P = new Path2D();
+    P.moveTo(-r0, r0); P.arc(0, r0, r0, Math.PI, 0);
+    P.bezierCurveTo(r0, gh * 0.45, r0 * 1.28, gh * 0.68, r0 * 1.18, gh * 0.86);
+    for (var w = 0; w < 4; w++) { var xa = r0 * 1.18 - 2 * r0 * 1.18 * (w / 4), xb = r0 * 1.18 - 2 * r0 * 1.18 * ((w + 1) / 4); P.quadraticCurveTo((xa + xb) / 2, gh * (w % 2 ? 1.0 : 0.76), xb, gh * 0.86); }
+    P.bezierCurveTo(-r0 * 1.28, gh * 0.68, -r0, gh * 0.45, -r0, r0); P.closePath();
+    m.translate(cx, top); m.rotate(tilt);
+    m.fillStyle = "rgba(255,255,255,.45)"; m.shadowColor = "#fff"; m.shadowBlur = gw * 0.08; m.fill(P);
+    m.translate(gw * 0.06, -gh * 0.02); m.fillStyle = "rgba(255,255,255,.3)"; m.fill(P); /* druhý, posunutý obrys: chvění */
+    var mk = document.createElement("canvas"); mk.width = W; mk.height = H; m = mk.getContext("2d");
+    m.imageSmoothingEnabled = true; m.drawImage(ms, 0, 0, W, H);
+    /* mlhavá nerovnost: náhodné skvrny přes celou postavu */
+    var nz = document.createElement("canvas"); nz.width = 14; nz.height = 18; var nc = nz.getContext("2d");
+    for (var ny = 0; ny < 18; ny++) for (var nx = 0; nx < 14; nx++) { nc.fillStyle = "rgba(0,0,0," + (0.45 + Math.random() * 0.55).toFixed(2) + ")"; nc.fillRect(nx, ny, 1, 1); }
+    m.globalCompositeOperation = "destination-in"; m.drawImage(nz, 0, 0, W, H);
+    var gr = m.createLinearGradient(0, top, 0, top + gh); gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(0.5, "rgba(0,0,0,.85)"); gr.addColorStop(1, "rgba(0,0,0,0)");
+    m.fillStyle = gr; m.fillRect(0, 0, W, H);
+    var mask = m.getImageData(0, 0, W, H).data;
+    /* 4) noční tón, duch jako opak stínu, vinětace, zrno */
+    for (var i = 0; i < d.length; i += 4) {
+      var p = i >> 2, px = p % W, py = (p / W) | 0, a = mask[i + 3] / 255;
+      var R = d[i], Gc = d[i + 1], B = d[i + 2];
+      if (a > 0.01) { R += (blur[i] - R) * a * 0.7; Gc += (blur[i + 1] - Gc) * a * 0.7; B += (blur[i + 2] - B) * a * 0.7; }
+      var L = 0.3 * R + 0.59 * Gc + 0.11 * B;
+      R = (R * 0.5 + L * 0.5) * 0.74; Gc = (Gc * 0.5 + L * 0.5) * 0.82; B = (B * 0.5 + L * 0.5) * 0.9 + 8;
+      if (a > 0.01) { var k2 = Math.min(0.8, a * 0.7); R += (226 - R) * k2; Gc += (240 - Gc) * k2; B += (236 - B) * k2; }
+      var vx = px / W - 0.5, vy = py / H - 0.5, v = 1 - (vx * vx + vy * vy) * 1.1, nz = (Math.random() - 0.5) * 20;
+      d[i] = clamp(R * v + nz, 0, 255); d[i + 1] = clamp(Gc * v + nz, 0, 255); d[i + 2] = clamp(B * v + nz, 0, 255);
+    }
+    c.putImageData(im, 0, 0);
+    /* 5) oči: dvě tmavé, rozostřené prázdné skvrny v hlavě */
+    c.save(); c.translate(cx, top); c.rotate(tilt);
+    c.filter = "blur(" + Math.round(gw * 0.04) + "px)";
+    c.fillStyle = "rgba(14,20,18,.32)"; c.shadowColor = "rgba(0,0,0,.4)"; c.shadowBlur = gw * 0.1;
+    [-1, 1].forEach(function (sd) { c.beginPath(); c.ellipse(sd * gw * 0.16, gw * 0.52, gw * 0.06, gw * 0.1, sd * 0.12, 0, Math.PI * 2); c.fill(); });
+    c.restore();
+    /* 6) jméno ducha a čas, jako na staré fotce z detektoru */
+    var now = new Date(), stamp = now.getDate() + ". " + (now.getMonth() + 1) + ". " + now.getFullYear() + "  " + now.getHours() + ":" + String(now.getMinutes()).padStart(2, "0") + "  ·  Detektor typ II";
+    c.textAlign = "left"; c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = W * 0.01;
+    c.font = "italic 500 " + Math.round(W * 0.045) + "px 'EB Garamond', Georgia, serif"; c.fillStyle = "rgba(232,238,234,.9)"; c.fillText(label, W * 0.045, H - W * 0.075);
+    c.font = Math.round(W * 0.022) + "px 'IBM Plex Mono', Menlo, monospace"; c.fillStyle = "rgba(185,214,200,.75)"; c.fillText(stamp, W * 0.045, H - W * 0.035);
+    return cv;
+  }
+  $("#snap").addEventListener("click", function () { unlock(); var cam = $("#cam"); cam.value = ""; cam.click(); });
+  $("#cam").addEventListener("change", function () {
+    var f = this.files && this.files[0], i = revealIdx; if (!f || i < 0) return;
+    var url = URL.createObjectURL(f), img = new Image();
+    img.onload = function () {
+      var label = ghostLabel(i);
+      (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () {
+        var cv = hauntPhoto(img, label); URL.revokeObjectURL(url);
+        cv.toBlob(function (blob) {
+          if (!blob) return;
+          var out = URL.createObjectURL(blob);
+          lastPhoto = { blob: blob, url: out, name: label };
+          photos[i] = lastPhoto;
+          $("#photoimg").src = out; $("#photo").hidden = false; stageEl.hidden = true; $("#sharephoto").hidden = false;
+          whisper(0.14, 2); bell(220, 0.1, 3);
+          speak("Podívej se na fotku. Je tam?", true);
+        }, "image/jpeg", 0.88);
+      });
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); speak("Fotku se nepodařilo otevřít. Zkus to znovu.", true); };
+    img.src = url;
+  });
+  $("#sharephoto").addEventListener("click", function () {
+    if (!lastPhoto) return;
+    var name = "duch-" + lastPhoto.name.toLowerCase().replace(/[^a-z0-9áčďéěíňóřšťúůýž]+/g, "-") + ".jpg";
+    var file = null; try { file = new File([lastPhoto.blob], name, { type: "image/jpeg" }); } catch (e) {}
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: lastPhoto.name }).catch(function () {}); return; }
+    var a = document.createElement("a"); a.href = lastPhoto.url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  });
+
   /* odložené zvuky a hlášky jedné obrazovky; při odchodu z ní se zruší */
   var later = [];
   function after(ms, fn) { later.push(setTimeout(fn, ms)); }
@@ -1862,7 +1997,8 @@
     catchBtn.disabled = true;
     var time = mmss((finishedAt - startedAt) / 1000);
     revealEl.hidden = false; restartAnims(revealEl);
-    stageEl.innerHTML = '<div class="time">' + time + "</div>";
+    stageEl.innerHTML = '<div class="time">' + time + "</div>" + (photos.filter(Boolean).length ? '<div class="gallery">' + photos.filter(Boolean).map(function (ph) { return '<img src="' + ph.url + '" alt="' + ph.name + '">'; }).join("") + "</div>" : "");
+    stageEl.hidden = false; $("#photo").hidden = true; $("#photobtns").hidden = true;
     $("#rname").textContent = "Ticho.";
     $("#rquote").textContent = NUM[N][1] + " Svíčky hoří.";
     var fin = "Ticho. " + NUM[N][1] + " Tvůj čas je " + time + ".";
@@ -2458,6 +2594,15 @@
   sheet.addEventListener("click", function (e) { if (e.target === sheet || e.target.closest(".btn")) openSheet(false); });
 
   $("#introsettings").addEventListener("click", function () { openSheet(true); });
+  /* na úvodu: když už hra smí znát polohu, mapa okolí se stáhne potichu dopředu, start je pak skoro hned */
+  try {
+    if (navigator.permissions && navigator.geolocation) navigator.permissions.query({ name: "geolocation" }).then(function (st) {
+      if (st.state !== "granted") return;
+      navigator.geolocation.getCurrentPosition(function (p) {
+        if (state === "intro" || state === "locating") areaFor({ lat: p.coords.latitude, lon: p.coords.longitude });
+      }, function () {}, { enableHighAccuracy: false, maximumAge: 300000, timeout: 15000 });
+    }).catch(function () {});
+  } catch (e) {}
 
   frame(); callLoop(); heartLoop(); clickLoop(); vibeLoop(); beepLoop(); staticLoop();
 })();
