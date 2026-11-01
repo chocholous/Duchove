@@ -502,7 +502,7 @@
     <p class="kicker">Detektor strašidel</p>
     <h1>Lovci duchů</h1>
     <p class="sub">Venku, za šera, poslouchej.</p>
-    <p>Detektor kolem tebe zachytí strašidla. Na radaru se rozsvítí světýlka. Ťukni na jedno a jdi za ním. Až budeš blízko, uslyšíš ho. Strašidla se schovávají u chodníků a cest. Každé je jiné: plaché uteče, když běžíš, spáč se probudí, když s detektorem třeseš, zvědavec se připlíží, když stojíš, a schovávač umí vyděsit. Než ho chytíš, musíš ho zakreslit do kruhu nebo na něj nahlas říct zaklínadlo.</p>
+    <p>Detektor kolem tebe zachytí strašidla. Na radaru se objeví duchové. Ťukni na jednoho a jdi za ním. Až budeš blízko, uslyšíš ho. Strašidla se schovávají u chodníků a cest. Každé je jiné: plaché uteče, když běžíš, spáč se probudí, když s detektorem třeseš, zvědavec se připlíží, když stojíš, a schovávač umí vyděsit. Než ho chytíš, musíš ho zakreslit do kruhu nebo na něj nahlas říct zaklínadlo.</p>
     <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. <span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_car</span> Z auta: pět strašidel se postupně objevuje na silnici, po které jedete, asi kilometr před autem. Hraje jen spolujezdec, nikdy řidič. Je potřeba zapnutá poloha (GPS).</span></div>
     <div class="note" id="ioshint" hidden><b>Přes celou obrazovku</b><span>Na iPhonu ťukni na Sdílet a pak Přidat na plochu. Detektor se pak otevře jako aplikace bez lišt prohlížeče.</span></div>
     <div class="btns">
@@ -754,7 +754,7 @@
   if ("speechSynthesis" in window) { pickVoice(); try { speechSynthesis.addEventListener("voiceschanged", pickVoice); } catch (e) { speechSynthesis.onvoiceschanged = pickVoice; } }
   /* Vypravěč mluví klidně a pomaleji, ne jako moderátor.
      Přečte každý pokyn: naléhavé (force) hned, ostatní počkají ve frontě, až domluví.
-     Méně důležité (low, třeba „světýlko je vlevo“) jen když je ticho. */
+     Méně důležité (low, třeba „duch je vlevo“) jen když je ticho. */
   var speakQ = [];
   function speechBusy() { try { return speechSynthesis.speaking || speechSynthesis.pending; } catch (e) { return false; } }
   function speakNow(text) {
@@ -877,7 +877,7 @@
     var t = e.tags || {};
     return { hw: t.highway || "", foot: t.foot, fw: t.footway, nm: t.ref || t.name || "",
       ow: t.oneway === "yes" || t.oneway === "1" || t.junction === "roundabout" || t.highway === "motorway" ? 1 : t.oneway === "-1" ? -1 : 0,
-      acc: t.access, indoor: t.indoor, tn: t.tunnel, br: t.bridge, cov: t.covered, pts: geomPts(e.geometry) };
+      acc: t.access, indoor: t.indoor, tn: t.tunnel, br: t.bridge, cov: t.covered, svc: t.service, pts: geomPts(e.geometry) };
   }
   function osmWays(lat, lon, radius, re) {
     var q = "[out:json][timeout:8];way(around:" + Math.round(radius) + "," + lat.toFixed(6) + "," + lon.toFixed(6) + ")[highway~\"" + re + "\"];out tags geom;";
@@ -888,19 +888,23 @@
   /* Pěšky: cesty a k tomu všechno, kde strašidlo být nesmí: budovy, voda a řeky, koleje, staveniště, vojenské a jiné uzavřené plochy */
   function osmWalkArea(o) {
     var c = o.lat.toFixed(6) + "," + o.lon.toFixed(6), A = function (r) { return "(around:" + r + "," + c + ")"; };
-    var q = "[out:json][timeout:10];(" +
-      "way" + A(75) + "[highway~\"" + FOOT_RE + "\"];" +
-      "way" + A(90) + "[building];" +
+    var q = "[out:json][timeout:12];(" +
+      "way" + A(110) + "[highway];" +
+      "way" + A(110) + "[building];relation" + A(110) + "[building];" +
       "way" + A(130) + "[natural=water];relation" + A(130) + "[natural=water];" +
       "way" + A(130) + "[waterway];" +
-      "way" + A(110) + "[landuse~\"^(railway|construction|military|landfill|quarry|brownfield)$\"];" +
+      "way" + A(110) + "[landuse~\"^(railway|construction|military|landfill|quarry|brownfield|allotments|farmyard|garages)$\"];" +
+      "relation" + A(110) + "[landuse~\"^(railway|construction|military|allotments|farmyard|garages)$\"];" +
+      "way" + A(110) + "[amenity~\"^(school|kindergarten|prison|swimming_pool)$\"];relation" + A(110) + "[amenity~\"^(school|kindergarten|prison)$\"];" +
+      "way" + A(110) + "[leisure~\"^(garden|swimming_pool)$\"];" +
       "way" + A(100) + "[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
-      "way" + A(90) + "[leisure=swimming_pool];way" + A(90) + "[amenity=swimming_pool];" +
+      "node" + A(110) + "[barrier~\"^(gate|lift_gate|swing_gate|sliding_gate|turnstile|full-height_turnstile)$\"];" +
       ");out tags geom;";
     return overpass(q).then(function (els) {
-      var ways = [], polys = [], lines = [];
+      var ways = [], polys = [], lines = [], gates = {};
       els.forEach(function (e) {
         var t = e.tags || {};
+        if (e.type === "node") { if (t.barrier) gates[nodeKey(e)] = true; return; }
         if (e.type === "way" && e.geometry && e.geometry.length > 1) {
           if (t.highway) { ways.push(wayInfo(e)); return; }
           var pts = geomPts(e.geometry);
@@ -910,19 +914,84 @@
             return;
           }
           if (t.railway) { lines.push({ pts: pts, buf: 8 }); return; }
+          /* veřejná zahrada smí, soukromá ne */
+          if (t.leisure === "garden" && /^(yes|public|permissive)$/.test(t.access || "")) return;
           if (closedRing(pts)) polys.push(pts);
-          lines.push({ pts: pts, buf: t.building ? 1.5 : 3 }); /* odstup od zdí a břehů */
+          lines.push({ pts: pts, buf: t.building ? 3 : 3 }); /* odstup od zdí a plotů */
         } else if (e.type === "relation" && e.members) {
+          /* složené objekty (dům s dvorem, velký blok, řeka): obrysy se poskládají z kusů */
+          var outer = [];
           e.members.forEach(function (m) {
-            if (m.role === "inner" || !m.geometry || m.geometry.length < 2) return;
+            if (m.type !== "way" || !m.geometry || m.geometry.length < 2) return;
             var pts = geomPts(m.geometry);
-            if (closedRing(pts)) polys.push(pts);
             lines.push({ pts: pts, buf: 3 });
+            if (m.role !== "inner") outer.push(pts);
           });
+          assembleRings(outer).forEach(function (r) { polys.push(r); });
         }
       });
-      return { ways: ways, polys: polys, lines: lines };
+      /* odstup 3 m od soukromých, příjezdových a vnitřních cest (vjezdy do dvorů, průchody) */
+      ways.forEach(function (w) { if (!walkable(w)) lines.push({ pts: w.pts, buf: 3 }); });
+      var area = { ways: ways, polys: polys, lines: lines };
+      area.reach = reachable(o, ways, gates);
+      return area;
     });
+  }
+  /* poskládá uzavřené obrysy z kusů cest (konec jednoho = začátek dalšího) */
+  function assembleRings(parts) {
+    var rings = [], open = [], same = function (a, b) { return a.lat === b.lat && a.lon === b.lon; };
+    parts.forEach(function (p) { if (closedRing(p)) rings.push(p); else open.push(p.slice()); });
+    while (open.length) {
+      var cur = open.shift(), grew = true;
+      while (!same(cur[0], cur[cur.length - 1]) && grew) {
+        grew = false;
+        for (var i = 0; i < open.length; i++) {
+          var q = open[i], end = cur[cur.length - 1];
+          if (same(end, q[0])) cur = cur.concat(q.slice(1));
+          else if (same(end, q[q.length - 1])) cur = cur.concat(q.slice(0, -1).reverse());
+          else continue;
+          open.splice(i, 1); grew = true; break;
+        }
+      }
+      if (cur.length > 3 && same(cur[0], cur[cur.length - 1])) rings.push(cur);
+    }
+    return rings;
+  }
+  /* Kam se dá z místa startu dojít pěšky, aniž by se šlo domem, branou, soukromou nebo příjezdovou cestou.
+     Pěšiny ve dvorech jsou s ulicí spojené jen průchodem nebo bránou, takže do téhle sítě nepatří. */
+  function walkable(w) {
+    if (/^(motorway|trunk|motorway_link|trunk_link|corridor|elevator|construction|proposed|raceway|bus_guideway)$/.test(w.hw)) return false;
+    if (/^(private|no|customers|delivery|agricultural|forestry)$/.test(w.acc || "") && !/^(yes|designated|permissive)$/.test(w.foot || "")) return false;
+    if (w.foot === "no" || (w.indoor && w.indoor !== "no") || (w.tn && w.tn !== "no") || (w.cov && w.cov !== "no")) return false;
+    if (w.hw === "service" && w.svc && w.svc !== "alley") return false;
+    return true;
+  }
+  function reachable(o, ways, gates) {
+    var parent = {}, size = {};
+    function find(k) { while (parent[k] !== k) { parent[k] = parent[parent[k]]; k = parent[k]; } return k; }
+    function add(k) { if (parent[k] === undefined) { parent[k] = k; size[k] = 0; } }
+    function join(a, b) { a = find(a); b = find(b); if (a !== b) { parent[b] = a; size[a] += size[b]; } }
+    ways.forEach(function (w) {
+      if (!walkable(w)) return;
+      for (var k = 1; k < w.pts.length; k++) {
+        var ka = nodeKey(w.pts[k - 1]), kb = nodeKey(w.pts[k]);
+        add(ka); add(kb);
+        size[find(ka)] += dist(w.pts[k - 1], w.pts[k]);
+        if (!gates[ka] && !gates[kb]) join(ka, kb); /* brána přerušuje cestu */
+      }
+    });
+    /* start: největší síť cest, která vede do 60 m od hráče (ne malá síť uvnitř dvora) */
+    var best = null;
+    ways.forEach(function (w) {
+      if (!walkable(w)) return;
+      for (var k = 1; k < w.pts.length; k++) {
+        if (projSeg(o, w.pts[k - 1], w.pts[k]).d > 60) continue;
+        var r = find(nodeKey(w.pts[k - 1])), sz = size[r];
+        if (!best || sz > best.sz) best = { r: r, sz: sz };
+      }
+    });
+    if (!best) return null;
+    return function (w, a, b) { return walkable(w) && find(nodeKey(a)) === best.r && find(nodeKey(b)) === best.r; };
   }
   function closedRing(pts) { var a = pts[0], b = pts[pts.length - 1]; return pts.length > 3 && a.lat === b.lat && a.lon === b.lon; }
   function inPoly(p, poly) {
@@ -952,16 +1021,18 @@
     if (w.hw === "corridor" || w.hw === "elevator" || (w.indoor && w.indoor !== "no")) return 0;
     if ((w.tn && w.tn !== "no") || (w.cov && w.cov !== "no") || (w.br && w.br !== "no")) return 0;
     if (/^(footway|path|pedestrian|living_street|track|cycleway|bridleway)$/.test(w.hw)) return 1;
-    if (/^(residential|service|unclassified)$/.test(w.hw)) return 2;
+    if (/^(residential|unclassified)$/.test(w.hw) || (w.hw === "service" && w.svc === "alley")) return 2; /* příjezdy do dvorů a garáží ne */
     return 0;
   }
   /* body každé 3 m podél cest, jen v daném rozmezí vzdálenosti od startu */
   function samplePaths(o, ways, rMin, rMax, area) {
     var out = [], danger = ways.filter(function (w) { return DANGER.test(w.hw); });
+    if (area && !area.reach) return out; /* hráč není u žádné veřejné cesty: raději nic */
     ways.forEach(function (w) {
       var pref = footPref(w); if (!pref) return;
       for (var k = 1; k < w.pts.length; k++) {
         var a = w.pts[k - 1], b = w.pts[k], L = dist(a, b), steps = Math.max(1, Math.floor(L / 3));
+        if (area && !area.reach(w, a, b)) continue; /* sem se z ulice nedojde (dvůr za průchodem nebo bránou) */
         for (var s = 0; s <= steps; s++) {
           var t = s / steps, p = { lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t }, d = dist(o, p);
           if (d >= rMin && d <= rMax && !(danger.length && (snapToWays(p, danger) || { d: 99 }).d < 8) && !blockedAt(p, area)) out.push({ lat: p.lat, lon: p.lon, d: d, b: bearing(o, p), pref: pref });
@@ -1214,7 +1285,7 @@
     dots.forEach(function (d) { if (d.parentNode) d.parentNode.removeChild(d); });
     dots = ghosts.map(function (g, i) {
       var d = document.createElement("button");
-      d.type = "button"; d.className = "dot"; d.dataset.cls = ""; d.setAttribute("aria-label", "Světýlko " + (i + 1));
+      d.type = "button"; d.className = "dot"; d.dataset.cls = ""; d.setAttribute("aria-label", "Duch " + (i + 1));
       d.addEventListener("click", function () { if (state === "pick" && !ghosts[i].caught) chooseTarget(i, ""); });
       radar.appendChild(d); return d;
     });
@@ -1238,10 +1309,11 @@
     var loadArea = function () {
       return Promise.race([osmWalkArea(origin).catch(function () { return null; }), new Promise(function (r) { setTimeout(function () { r(null); }, 22000); })]);
     };
-    var mapFail = false;
+    var mapFail = false, failWhy = "map";
     var placing = mode === "walk" && !savedGame
       ? loadArea().then(function (area) {
-          if (!area) return null;
+          if (!area) { failWhy = "map"; return null; }
+          failWhy = "paths";
           pathPts = samplePaths(o, area.ways, 12, 55, area);
           return placeOnPaths(o, area.ways, N, area);
         })
@@ -1257,7 +1329,9 @@
       if (gen !== bootGen || state !== "boot") return;
       if (mapFail) {
         clearSave(); toIntro();
-        var m = "Nepodařilo se načíst mapu okolí. Bez ní nevím, kde je bezpečně venku, tak strašidla neschovám. Zkus to za chvilku znovu.";
+        var m = failWhy === "paths"
+          ? "Kolem tebe nevidím chodníky ani cesty, kam se dá bezpečně dojít. Vyjdi na ulici nebo do parku a zkus to znovu."
+          : "Nepodařilo se načíst mapu okolí. Bez ní nevím, kde je bezpečně venku, tak duchy neschovám. Zkus to za chvilku znovu.";
         msg.textContent = m; speak(m, true); return;
       }
       radar.classList.remove("boot"); ambience(true);
@@ -1555,7 +1629,7 @@
     finale: [
       { title: "Svíčky hoří", text: "Ticho. Všech pět strašidel je nalezeno. {jmena}. Každé z nich dnes někdo uviděl, a tak už není samo. Za {cas} jsme projeli kus kraje plný tajemství. Svíčky hoří a cesta tiše pokračuje. Pošeptejte si, které strašidlo bylo vaše nejmilejší." },
       { title: "Kniha lovců", text: "Lovci duchů si všechno zapisují do své knihy. Dnes v ní přibylo pět jmen. {jmena}. Lov trval {cas} a žádné strašidlo se nebálo, protože jste byli laskaví. Teď odpočívají v mlze a čekají na další jízdu. Pošeptejte jim všem dobrou noc." },
-      { title: "Pět světýlek", text: "Venku houstne šero a ve tmě svítí pět malých světýlek. To jsou {jmena}. Kus cesty nás doprovodí a pak se tiše vrátí na svá místa. Za {cas} jste je našli všechny. Vymyslete spolu, kde se s nimi potkáme příště." }
+      { title: "Pět duchů", text: "Venku houstne šero a ve tmě tiše svítí pět duchů. Jsou to {jmena}. Kus cesty nás doprovodí a pak se tiše vrátí na svá místa. Za {cas} jste je našli všechny. Vymyslete spolu, kde se s nimi potkáme příště." }
     ]
   };
   /* jméno strašidla podle místa; stejné jméno se v jedné jízdě neopakuje */
@@ -1658,7 +1732,7 @@
   function showPick(prefix) {
     cancelLater(); state = "pick"; target = null; revealEl.hidden = true; save(); ambience(true);
     var left = ghosts.filter(function (g) { return !g.caught; }).length;
-    var t = (prefix || "") + (left === 1 ? "Zbývá poslední světýlko. Ťukni na něj." : "Ťukni na jedno světýlko na radaru.");
+    var t = (prefix || "") + (left === 1 ? "Zbývá poslední duch. Ťukni na něj." : "Ťukni na jednoho ducha na radaru.");
     sayEl.textContent = t; speak(t, true);
   }
   function chooseTarget(i, prefix) {
@@ -1666,7 +1740,7 @@
     var b0 = nearest(); lastBand = b0 ? bandOf(b0.d) : "";
     lastDir = ""; nextCall = performance.now() + 3000;
     bell(98, 0.12, 4);
-    var t = prefix + (mode === "car" ? " Sleduj světýlko a poslouchej." : "Jdi tiše za světýlkem. A poslouchej.");
+    var t = prefix + (mode === "car" ? " Sleduj ducha a poslouchej." : "Jdi tiše za duchem. A poslouchej.");
     sayEl.textContent = t; speak(t, true);
   }
   /* Strašidlo se neukazuje. Jen oči ve tmě a zpráva, že je někde tady. */
@@ -1950,14 +2024,14 @@
     close: ["Velmi blízko.", "Je kousek před námi. Připrav si ruku."],
     strong: ["Sílí to.", "Signál sílí. Strašidlo je na silnici před námi."],
     weak: ["Slabý signál.", "Slabý signál. Jedeme správně."],
-    cold: ["Ticho.", "Strašidlo je na silnici před námi. Sleduj světýlko."]
+    cold: ["Ticho.", "Duch je na silnici před námi. Sleduj ho na radaru."]
   };
   var bandText = {
     here: ["Je tady.", "Je tady. Ťukni na ruku."],
     close: ["Velmi blízko.", "Velmi blízko. Zpomal a rozhlížej se."],
     strong: ["Blízko.", "Je blízko. Slyšíš ho?"],
-    weak: ["Něco cítím.", "Něco cítím. Jdi za světýlkem."],
-    cold: ["Ticho.", "Zatím ticho. Jdi za světýlkem."]
+    weak: ["Něco cítím.", "Něco cítím. Jdi za duchem."],
+    cold: ["Ticho.", "Zatím ticho. Jdi za duchem."]
   };
 
   function frame() {
@@ -2004,7 +2078,7 @@
       var far = origin ? dist(pos, origin) : 0;
       hintEl.textContent = "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") + (mode === "walk" && far > 120 ? " · jsi daleko od startu, vrať se" : "");
     } else if (state === "pick") {
-      valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Vyber světýlko."; stateEl.className = "state"; catchBtn.disabled = true;
+      valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Vyber ducha."; stateEl.className = "state"; catchBtn.disabled = true;
       hintEl.textContent = pos ? "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") : "";
     } else if (state === "intro") {
       valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = ""; stateEl.className = "state"; hintEl.textContent = "";
@@ -2046,7 +2120,7 @@
     var now = performance.now();
     if (dir === lastDir || now - lastDirAt < 7000) return;
     lastDir = dir; lastDirAt = now;
-    speak("Světýlko je " + dir + ".", false, true);
+    speak("Duch je " + dir + ".", false, true);
   }
   /* Strašidlo se ozývá: zdálky slabě a s ozvěnou, zblízka zřetelně a častěji */
   var nextCall = 0;
