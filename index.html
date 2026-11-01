@@ -63,13 +63,23 @@
   .radar.off .sweep { animation-play-state: paused; opacity: .15; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .me { position: absolute; left: 50%; top: 50%; width: 3%; aspect-ratio: 1; margin: -1.5% 0 0 -1.5%; border-radius: 50%; background: var(--ecto); }
-  .dot { position: absolute; width: 6%; aspect-ratio: 1; margin: -3% 0 0 -3%; border-radius: 50%; background: var(--amber); opacity: .5; transition: left .25s linear, top .25s linear, opacity .3s; }
-  .dot.near { background: var(--hot); box-shadow: 0 0 14px var(--hot); opacity: 1; }
-  .dot.tgh { width: 17%; height: auto; aspect-ratio: 120 / 150; margin: -10.6% 0 0 -8.5%; border-radius: 0; background: none; opacity: 1; }
-  .dot.tgh svg { width: 100%; height: 100%; filter: drop-shadow(0 0 10px var(--glow, #fff)); }
-  .dot.tgh.here svg { animation: pulse .8s ease-in-out infinite; }
-  @keyframes pulse { 50% { transform: scale(1.25); } }
-  .dot:not(.tgh) { display: none; }
+  .dot {
+    position: absolute; width: 13%; aspect-ratio: 1; margin: -6.5% 0 0 -6.5%; padding: 0; border: 2px solid rgba(0,0,0,.35); border-radius: 50%;
+    display: none; place-items: center; background: var(--amber); color: #3a2400; font: 600 clamp(16px, 6cqmin, 28px)/1 var(--display);
+    box-shadow: 0 0 18px rgba(255,179,64,.75); transition: left .25s linear, top .25s linear;
+  }
+  .dot.pick { display: grid; cursor: pointer; animation: bob 1.3s ease-in-out infinite; }
+  .dot.tgt { display: grid; cursor: default; background: var(--hot); color: #fff; box-shadow: 0 0 24px var(--hot); animation: bob 1s ease-in-out infinite; }
+  .dot.tgt.here { animation: pulse .5s ease-in-out infinite; }
+  .dot.found { display: block; width: 11%; height: auto; aspect-ratio: 120 / 150; margin: -6.9% 0 0 -5.5%; border: 0; border-radius: 0; background: none; box-shadow: none; opacity: .6; }
+  .dot.found svg { width: 100%; height: 100%; }
+  @keyframes bob { 50% { transform: scale(1.12); } }
+  @keyframes pulse { 50% { transform: scale(1.35); } }
+  h1 .q { display: inline-grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--hot); color: #fff; font-size: 18px; letter-spacing: 0; }
+  .shamble { transform-origin: 50% 90%; animation: shamble 1.8s ease-in-out infinite; }
+  @keyframes shamble { 0%, 100% { transform: rotate(-3deg) translateX(-2%); } 40% { transform: rotate(2.5deg) translateX(2%); } 55% { transform: rotate(1deg) translateX(1%) translateY(1%); } }
+  .reveal.zom { background: radial-gradient(circle at 50% 40%, #1f2a16 0, #0b0d08 72%); }
+  .reveal.zom .boo { color: #9fd36b; text-shadow: 0 0 18px rgba(159,211,107,.5); }
   .north { position: absolute; top: 3%; left: 50%; transform: translateX(-50%); font: 500 12px/1 var(--display); letter-spacing: .14em; color: var(--dim); }
 
   .info { display: flex; flex-direction: column; gap: 8px; }
@@ -164,19 +174,19 @@
   .troupe svg { width: 100%; height: auto; }
 
   @media (max-height: 640px) { .say { min-height: 3em; font-size: 15px; } .leds { height: 30px; } .value { font-size: 28px; } }
-  @media (prefers-reduced-motion: reduce) { .sweep, .float, .ghost .eyes, .stage .pop, .spark { animation: none; } .led, .dot { transition: none; } .dot.tgh.here svg { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .sweep, .float, .ghost .eyes, .stage .pop, .spark { animation: none; } .led, .dot { transition: none; } .dot, .shamble { animation: none !important; } }
 </style>
 </head>
 <body>
 <main class="app">
   <header class="top">
     <h1 id="title">Detektor duchů</h1>
-    <div class="counter" id="counter">0/5</div>
+    <div class="counter" id="counter">0/3</div>
     <div class="timeleft" id="time">0:00</div>
   </header>
 
   <div class="stagebox">
-    <div class="radar off" id="radar" aria-hidden="true">
+    <div class="radar off" id="radar">
       <div class="sweep"></div>
       <div class="north" id="north">N</div>
       <div class="me"></div>
@@ -192,7 +202,6 @@
 
   <div class="ctl">
     <button class="btn primary" id="catch" type="button" disabled>Chyť ducha</button>
-    <button class="btn" id="pickbtn" type="button" disabled>Jiný duch</button>
     <button class="btn" id="newgame" type="button">Nová hra</button>
     <button class="btn" id="sound" type="button" aria-pressed="true">Zvuk zap</button>
     <button class="btn" id="voice" type="button" aria-pressed="true">Hlas zap</button>
@@ -208,7 +217,7 @@
 <section class="intro" id="intro">
   <div class="intro-in">
     <h2>Lovci duchů</h2>
-    <p>Telefon ti po stisknutí tlačítka rozmístí tři duchy do 50 metrů kolem tebe. Vyber si, kterého půjdeš hledat, a jdi za ním podle radaru. Poslouchej, jak houká. U ducha stiskni Chyť ducha.</p>
+    <p>Telefon kolem tebe schová tři strašidla, do 50 metrů. Na radaru se objeví tři tečky. Ťukni na jednu a jdi k ní. Kdo v ní je, uvidíš, až ho najdeš. Může to být veselý duch, nebo zombie!</p>
     <div class="rules safe"><b>Bezpečí</b><span>Hrajte jen na bezpečném místě, daleko od silnice. Domluvte si hranice hřiště a čas návratu.</span></div>
     <div class="rules"><b>Potřebuješ</b><span>Zapnutou polohu (GPS) a povolit kompas. Venku pod širým nebem to funguje nejlépe.</span></div>
     <div class="btns">
@@ -217,14 +226,6 @@
       <button class="btn" id="testbtn" type="button">Zkouška doma bez GPS</button>
     </div>
     <p class="msg" id="msg" aria-live="polite"></p>
-  </div>
-</section>
-
-<section class="overlay" id="picker" hidden>
-  <div class="overlay-in">
-    <h2>Kterého ducha jdeš hledat?</h2>
-    <p id="pickhint">Ťukni na ducha. Na radaru pak uvidíš, kde je, a uslyšíš ho houkat.</p>
-    <div class="cards" id="cards"></div>
   </div>
 </section>
 
@@ -248,14 +249,83 @@
 
   /* ---------- Duchové ---------- */
   var CHARS = [
-    { name: "Kvído", body: "#eef3ff", glow: "#a9c4ff", acc: "hat", hoo: 330, line: "Bú! Jsem Kvído. Tak tohle bylo rychlé, ty jsi ale lovec!" },
-    { name: "Bublina", body: "#ffd3ea", glow: "#ff8fc8", acc: "bow", hoo: 520, line: "Hihi, mám tě! Jsem Bublina a schovávám se nejradši ze všech." },
-    { name: "Fanda", body: "#ccfbe6", glow: "#5fe3a8", acc: "glasses", hoo: 400, line: "Jsem Fanda. Přes ty brýle jsem tě vůbec neviděl přicházet!" },
-    { name: "Žužu", body: "#fff1ad", glow: "#ffc23d", acc: "crown", hoo: 460, line: "Já jsem Žužu, královna duchů. Uznávám, tohle se ti povedlo!" },
-    { name: "Mlžák", body: "#ddd0ff", glow: "#a98bff", acc: "scarf", hoo: 280, line: "Brrr, jsem Mlžák. Tady venku je mi zima. Vezmeš mě s sebou?" }
+    { type: "ghost", name: "Kvído", body: "#eef3ff", glow: "#a9c4ff", acc: "hat", hoo: 330, je: "je chycený", line: "Bú! Jsem Kvído. Tak tohle bylo rychlé, ty jsi ale lovec!" },
+    { type: "ghost", name: "Bublina", body: "#ffd3ea", glow: "#ff8fc8", acc: "bow", hoo: 520, je: "je chycená", line: "Hihi, mám tě! Jsem Bublina a schovávám se nejradši ze všech." },
+    { type: "zombie", name: "Zombie Hugo", v: "hugo", glow: "#9fd36b", hoo: 92, je: "je chycený", skin: ["#b3bd9f", "#7f8c69", "#3f4a33"], rot: [.27, .3, .12], seed: 7, line: "Grrr… Kdo mě to vzbudil? Oko jsem někde ztratil, ale tebe vidím dobře." },
+    { type: "zombie", name: "Zombie Ota", v: "ota", glow: "#c9b98a", hoo: 110, je: "je chycený", skin: ["#bdb6a5", "#8a8172", "#4a4238"], rot: [.32, .24, .14], seed: 11, line: "Uááá… Mozečky! Ach tak, to jsi jen ty. Tak dobře, máš mě." },
+    { type: "zombie", name: "Zombie Berta", v: "berta", glow: "#a9b8d6", hoo: 128, je: "je chycená", skin: ["#c3c6c4", "#8d95a1", "#4d5463"], rot: [.25, .27, .3], seed: 5, line: "Hrrr… Já jsem Berta. Sto let jsem se nečesala, a stejně mě máš." }
   ];
+  var zid = 0;
+  function zombieSVG(c, cls) {
+    var u = "z" + (++zid), s = c.skin, v = c.v;
+    var head = "M31 50 C29 21 44 7 60 7 C77 7 92 21 90 50 C89 66 87 78 81 88 C75 98 68 104 60 104 C52 104 44 98 39 89 C33 79 32 66 31 50 Z";
+    var eye = function (x, gone) {
+      if (gone) return '<ellipse cx="' + x + '" cy="53" rx="7.5" ry="5.6" fill="#0c0605"/><ellipse cx="' + x + '" cy="54.5" rx="5" ry="3" fill="#2a0c08" opacity=".9"/><circle cx="' + (x + 1.5) + '" cy="53" r=".9" fill="#ff5a3a" opacity=".8"/>';
+      return '<ellipse cx="' + x + '" cy="53" rx="6.8" ry="4.3" fill="url(#' + u + 'sc)"/>' +
+        '<path d="M' + (x - 6) + ' 53 q2 -1 3.2 .4 M' + (x + 6) + ' 52.6 q-2.2 -.6 -3.4 .8 M' + (x - 5) + ' 55 q2 .2 3 -1" stroke="#a3271d" stroke-width=".45" fill="none" opacity=".85"/>' +
+        '<circle cx="' + x + '" cy="53.2" r="2.9" fill="url(#' + u + 'ir)"/><circle cx="' + x + '" cy="53.2" r=".9" fill="#5b5f58" opacity=".7"/>' +
+        '<circle cx="' + (x + 1.1) + '" cy="52" r=".6" fill="#fff" opacity=".8"/>' +
+        '<path d="M' + (x - 7) + ' 51.5 Q' + x + ' 47.5 ' + (x + 7) + ' 51.5" stroke="#2a1e17" stroke-width="1.6" fill="none" opacity=".75"/>' +
+        '<path d="M' + (x - 6.6) + ' 55.2 Q' + x + ' 58.3 ' + (x + 6.6) + ' 55.2" stroke="#3a2a22" stroke-width="1" fill="none" opacity=".6"/>';
+    };
+    var teeth = "";
+    [[48.5, 87.2, 3, 4.2], [51.8, 86.3, 3.2, 5], [55.3, 85.8, 3.3, 5.6], [62.2, 85.8, 3.2, 4.4], [65.6, 86.4, 3, 5.4], [68.8, 87.3, 2.8, 3.8]].forEach(function (t, k) {
+      teeth += '<rect x="' + t[0] + '" y="' + t[1] + '" width="' + t[2] + '" height="' + t[3] + '" rx="1" fill="' + (k % 3 ? "#cdbf92" : "#a8925e") + '" stroke="#5c4a2c" stroke-width=".4" transform="rotate(' + (k * 7 % 11 - 5) + ' ' + t[0] + ' ' + t[1] + ')"/>';
+    });
+    teeth += '<rect x="50" y="94" width="3" height="3.4" rx="1" fill="#b9a878" stroke="#5c4a2c" stroke-width=".4"/><rect x="58" y="94.6" width="3.2" height="3" rx="1" fill="#9f8a58" stroke="#5c4a2c" stroke-width=".4"/><rect x="64" y="94" width="2.8" height="3.4" rx="1" fill="#c3b384" stroke="#5c4a2c" stroke-width=".4"/>';
+    var hair = "";
+    if (v === "hugo") hair = '<path d="M34 34 C38 16 52 9 62 10 C76 10 86 20 88 34 C82 24 74 19 62 20 C50 20 41 25 34 34 Z" fill="#241d17" opacity=".92"/><path d="M40 24 l-3 -6 M46 18 l-1 -7 M55 14 l1 -6 M66 14 l3 -6 M76 18 l4 -5" stroke="#241d17" stroke-width="1.4"/>';
+    if (v === "ota") hair = '<path d="M38 30 c2 -10 6 -14 8 -18 M44 22 c1 -8 3 -10 6 -12 M78 26 c-1 -8 -4 -12 -8 -14 M83 36 c0 -8 -2 -12 -5 -15" stroke="#3b342c" stroke-width="1" fill="none"/>';
+    if (v === "berta") hair = '<path d="M30 60 C24 30 40 6 60 6 C82 6 96 28 90 62 C92 80 96 100 99 116 C92 104 88 88 87 70 C86 42 78 22 62 20 C46 22 36 38 35 66 C34 88 28 104 22 116 C25 98 30 82 30 60 Z" fill="#3a3530"/><path d="M33 40 C28 70 26 96 21 118 M37 36 C34 66 33 92 30 112 M88 40 C92 70 94 96 100 118 M84 34 C88 64 89 90 92 112 M46 20 C40 30 38 40 38 52 M74 20 C80 30 82 40 83 50" stroke="#55504a" stroke-width=".8" fill="none" opacity=".8"/>';
+    var marks = "";
+    if (v === "hugo") marks = '<path d="M42 30 C52 26 66 25 80 31" stroke="#5a1d14" stroke-width="2.2" fill="none"/>' +
+      '<path d="M45 26 l-1 8 M51 24.6 l-.6 8 M57 24 l0 8 M63 24 l.4 8 M69 24.6 l.8 8 M75 26.4 l1 8" stroke="#1d1410" stroke-width="1"/>' +
+      '<ellipse cx="80" cy="76" rx="6" ry="4.5" fill="url(#' + u + 'wd)"/>';
+    if (v === "ota") marks = '<path d="M74 74 C80 70 87 72 86 80 C85 87 78 90 73 86 C70 83 70 77 74 74 Z" fill="url(#' + u + 'wd)"/>' +
+      '<path d="M75 80 l2.4 -.4 l.2 2.4 l2.6 -.3 l.1 2.2 l2.4 -.4" stroke="#d6c7a0" stroke-width="1.1" fill="none"/>' +
+      '<path d="M88 46 c4 2 6 8 4 14 c-3 -2 -5 -6 -4 -14 Z" fill="#3a1410"/>';
+    if (v === "berta") marks = '<path d="M50 28 C56 24 62 26 64 31 C60 35 53 35 50 28 Z" fill="url(#' + u + 'wd)"/><path d="M43 62 C45 68 46 74 44 80" stroke="#4d1712" stroke-width="1.2" fill="none" opacity=".8"/>';
+    var nose = v === "ota"
+      ? '<path d="M56 62 Q60 60 64 62 L66 75 Q60 79 54 75 Z" fill="url(#' + u + 'sk)"/><path d="M57 70 L60 64 L63 70 L62 76 Q60 77 58 76 Z" fill="#160806"/>'
+      : '<path d="M58 57 Q56 68 53 75 Q56 79 60 78 Q64 79 67 75 Q64 68 62 57" fill="rgba(0,0,0,.14)"/><path d="M55 75 q2 1.8 4 0 M61 75 q2 1.8 4 0" stroke="#1d120d" stroke-width="1.5" fill="none"/>';
+    return '<svg class="zombie ' + (cls || "") + '" viewBox="0 -10 120 150" aria-hidden="true">' +
+      '<defs>' +
+      '<radialGradient id="' + u + 'sk" cx="44%" cy="38%" r="70%"><stop offset="0" stop-color="' + s[0] + '"/><stop offset=".55" stop-color="' + s[1] + '"/><stop offset="1" stop-color="' + s[2] + '"/></radialGradient>' +
+      '<radialGradient id="' + u + 'sc" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#e6dfb8"/><stop offset=".7" stop-color="#c7b98a"/><stop offset="1" stop-color="#8a5a44"/></radialGradient>' +
+      '<radialGradient id="' + u + 'ir" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#d9ddd2"/><stop offset=".7" stop-color="#aab3a4"/><stop offset="1" stop-color="#6d7569"/></radialGradient>' +
+      '<radialGradient id="' + u + 'so" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#140c08" stop-opacity=".95"/><stop offset=".6" stop-color="#2a1a12" stop-opacity=".6"/><stop offset="1" stop-color="#2a1a12" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + u + 'wd" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#8a1a12"/><stop offset=".5" stop-color="#4a0806"/><stop offset="1" stop-color="#1e0302"/></radialGradient>' +
+      '<linearGradient id="' + u + 'sh" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset=".55" stop-color="#000" stop-opacity=".05"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient>' +
+      '<clipPath id="' + u + 'cl"><path d="' + head + '"/></clipPath>' +
+      '<filter id="' + u + 'rot" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".055" numOctaves="3" seed="' + c.seed + '"/><feColorMatrix values="0 0 0 0 ' + c.rot[0] + '  0 0 0 0 ' + c.rot[1] + '  0 0 0 0 ' + c.rot[2] + '  2.4 0 0 0 -1.05"/></filter>' +
+      '<filter id="' + u + 'pore" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="3"/><feColorMatrix values="0 0 0 0 .1  0 0 0 0 .08  0 0 0 0 .06  1.3 0 0 0 -.5"/></filter>' +
+      '<filter id="' + u + 'bl"><feGaussianBlur stdDeviation="2.2"/></filter>' +
+      '</defs>' +
+      '<path d="M6 140 C8 121 27 113 45 112 L75 112 C93 113 112 121 114 140 Z" fill="#35302a"/>' +
+      '<path d="M6 140 C8 121 27 113 45 112 L52 112 L56 124 L60 116 L64 126 L68 112 L75 112 C93 113 112 121 114 140 Z" fill="#2a2520" opacity=".9"/>' +
+      '<path d="M22 130 l6 -3 l-2 6 Z M92 128 l5 3 l-6 2 Z" fill="#14110e"/>' +
+      '<path d="M48 96 L46 116 Q60 122 74 116 L72 96 Z" fill="' + s[2] + '"/>' +
+      '<path d="M48 104 Q60 110 72 104" stroke="#000" stroke-opacity=".3" stroke-width="3" fill="none" filter="url(#' + u + 'bl)"/>' +
+      '<ellipse cx="30" cy="57" rx="5" ry="10" fill="' + s[1] + '"/><ellipse cx="90" cy="57" rx="5" ry="10" fill="' + s[2] + '"/>' +
+      '<path d="' + head + '" fill="url(#' + u + 'sk)"/>' +
+      '<g clip-path="url(#' + u + 'cl)">' +
+        '<rect x="20" y="0" width="80" height="110" filter="url(#' + u + 'rot)" opacity=".85"/>' +
+        '<rect x="20" y="0" width="80" height="110" filter="url(#' + u + 'pore)" opacity=".55"/>' +
+        '<g filter="url(#' + u + 'bl)" fill="#1c1a12" opacity=".45"><ellipse cx="41" cy="76" rx="6" ry="9"/><ellipse cx="79" cy="76" rx="6" ry="9"/><ellipse cx="60" cy="42" rx="20" ry="3"/></g>' +
+        '<rect x="20" y="0" width="80" height="110" fill="url(#' + u + 'sh)"/>' +
+        '<ellipse cx="46" cy="53.5" rx="11" ry="8.5" fill="url(#' + u + 'so)"/><ellipse cx="74" cy="53.5" rx="11" ry="8.5" fill="url(#' + u + 'so)"/>' +
+      '</g>' +
+      hair + marks + eye(46, v === "hugo") + eye(74, false) + nose +
+      '<path d="M45 86 Q52 83 60 84 Q68 83 75 86 Q73 96 66 99 Q60 101 54 99 Q47 96 45 86 Z" fill="#160604"/>' +
+      '<path d="M46 86.5 Q60 84 74 86.5 L74 88.5 Q60 86.5 46 88.5 Z" fill="#5a1d18"/>' + teeth +
+      '<path d="M45 86 Q52 83 60 84 Q68 83 75 86" stroke="#3a1e1a" stroke-width="1.4" fill="none"/>' +
+      '<path d="M47 95 Q54 100 60 100 Q66 100 73 95" stroke="#4a2a24" stroke-width="1.2" fill="none" opacity=".8"/>' +
+      '<path d="M66 99 q1 6 -1 10" stroke="#9fae8f" stroke-width="1.1" fill="none" opacity=".5"/>' +
+      '</svg>';
+  }
   function ghostSVG(i, cls) {
     var c = CHARS[i], a = "";
+    if (c.type === "zombie") return zombieSVG(c, cls === "float" ? "shamble" : cls);
     if (c.acc === "hat") a = '<rect x="32" y="16" width="56" height="7" rx="3" fill="#2a2d3a"/><rect x="42" y="-6" width="36" height="24" rx="3" fill="#2a2d3a"/><rect x="42" y="11" width="36" height="5" fill="#ff5a4f"/>';
     if (c.acc === "bow") a = '<path d="M84 24 L66 12 L66 36 Z M84 24 L102 12 L102 36 Z" fill="#ff4f9a"/><circle cx="84" cy="24" r="6" fill="#d9327a"/>';
     if (c.acc === "glasses") a = '<g fill="rgba(255,255,255,.35)" stroke="#2a2d3a" stroke-width="3.5"><circle cx="44" cy="60" r="13"/><circle cx="76" cy="60" r="13"/></g><path d="M57 59 Q60 55 63 59" stroke="#2a2d3a" stroke-width="3.5" fill="none"/>';
@@ -340,7 +410,7 @@
   var state = "intro"; /* intro | locating | play | done */
   var test = false, testHeading = 0, watchId = null, pos = null, acc = 99, t0Loc = 0, resumeData = null;
   var origin = null, ghosts = [], startedAt = 0, finishedAt = 0, target = null;
-  var picker = $("#picker"), cardsEl = $("#cards"), revealEl = $("#reveal"), stageEl = $("#stage"), titleEl = $("#title"), pickBtn = $("#pickbtn"), rnext = $("#rnext");
+  var revealEl = $("#reveal"), stageEl = $("#stage"), titleEl = $("#title"), rnext = $("#rnext");
   var heading = null, headingAt = 0, absSeen = false, listening = false, gpsHeading = null, gpsHeadAt = 0;
 
   var intro = $("#intro"), msg = $("#msg"), beginBtn = $("#begin"), resumeBtn = $("#resume"), testBtn = $("#testbtn");
@@ -420,7 +490,12 @@
   /* ---------- Průběh hry ---------- */
   function buildDots() {
     dots.forEach(function (d) { if (d.parentNode) d.parentNode.removeChild(d); });
-    dots = ghosts.map(function () { var d = document.createElement("span"); d.className = "dot"; radar.appendChild(d); return d; });
+    dots = ghosts.map(function (g, i) {
+      var d = document.createElement("button");
+      d.type = "button"; d.className = "dot"; d.dataset.cls = ""; d.setAttribute("aria-label", "Tečka " + (i + 1));
+      d.addEventListener("click", function () { if (state === "pick" && !ghosts[i].caught) chooseTarget(i, ""); });
+      radar.appendChild(d); return d;
+    });
   }
   function startGame(o, savedGame) {
     savedGame = savedGame || resumeData; resumeData = null;
@@ -431,33 +506,23 @@
     finishedAt = 0; intro.hidden = true; radar.classList.remove("off");
     lastBand = ""; buildDots(); save(); wake(true);
     if (target !== null) { chooseTarget(target, "Pokračujeme. "); return; }
-    var t = savedGame ? "Pokračujeme. Vyber, kterého ducha půjdeš hledat." : "Tři duchové se schovali do padesáti metrů kolem tebe. Vyber, kterého půjdeš hledat.";
-    showPicker(); speak(t, true);
+    showPick(savedGame ? "Pokračujeme. " : "Tři strašidla se schovala do padesáti metrů kolem tebe. ");
   }
-  function showPicker() {
-    state = "pick"; revealEl.hidden = true; picker.hidden = false; hush();
-    cardsEl.innerHTML = "";
-    ghosts.forEach(function (g, i) {
-      var b = document.createElement("button");
-      b.type = "button"; b.className = "gcard"; b.disabled = g.caught;
-      var sub = g.caught ? "Chycen ✓" : pos ? "asi " + Math.max(5, Math.round(dist(pos, g) / 5) * 5) + " m" : "";
-      b.innerHTML = ghostSVG(g.c, g.caught ? "" : "float") + "<b>" + CHARS[g.c].name + "</b><span>" + sub + "</span>";
-      if (!g.caught) b.firstChild.style.animationDelay = (-i * 0.5) + "s";
-      b.addEventListener("click", function () { chooseTarget(i, ""); });
-      cardsEl.appendChild(b);
-    });
-    var caught = ghosts.filter(function (g) { return g.caught; }).length;
-    $("#pickhint").textContent = caught ? "Máš chycené " + caught + " z " + N + ". Ťukni na dalšího ducha." : "Ťukni na ducha. Na radaru pak uvidíš, kde je, a uslyšíš ho houkat.";
+  /* Výběr: dítě ťukne na tečku na radaru. Kdo v ní je, se ukáže až po chycení. */
+  function showPick(prefix) {
+    state = "pick"; target = null; revealEl.hidden = true; save();
+    titleEl.textContent = "Vyber tečku";
+    var left = ghosts.filter(function (g) { return !g.caught; }).length;
+    var t = (prefix || "") + (left === 1 ? "Zbývá poslední tečka. Ťukni na ni." : "Ťukni na jednu tečku na radaru. Tu půjdeš hledat.");
+    sayEl.textContent = t; speak(t, true);
   }
   function chooseTarget(i, prefix) {
-    target = i; state = "play"; picker.hidden = true; save();
+    target = i; state = "play"; save();
     var b0 = nearest(); lastBand = b0 ? bandOf(b0.d) : "";
-    var c = CHARS[ghosts[i].c];
-    titleEl.innerHTML = ghostSVG(ghosts[i].c) + "<span>" + c.name + "</span>";
-    radar.style.setProperty("--glow", c.glow);
-    dots.forEach(function (el, k) { el.innerHTML = k === i ? ghostSVG(ghosts[k].c) : ""; el.className = "dot" + (k === i ? " tgh" : ""); });
+    titleEl.innerHTML = '<span class="q">?</span><span>Kdo to je?</span>';
     lastDir = ""; nextHoo = performance.now() + 2500;
-    var t = prefix + "Hledáš ducha jménem " + c.name + ". Na radaru vidíš, kde je. Poslouchej, jak houká.";
+    tone(300, 0.12, "square", 0.08, 600); setTimeout(function () { tone(600, 0.15, "square", 0.08); }, 120);
+    var t = prefix + "Tečka je zamčená. Jdi k ní a poslouchej. Kdo se v ní schovává?";
     sayEl.textContent = t; speak(t, true);
   }
   function jingle() {
@@ -474,18 +539,19 @@
     }
   }
   function showReveal(i) {
-    state = "reveal"; var c = CHARS[ghosts[i].c];
-    revealEl.style.setProperty("--glow", c.glow); revealEl.hidden = false;
-    $("#boo").textContent = "Bú!";
+    state = "reveal"; var c = CHARS[ghosts[i].c], zom = c.type === "zombie";
+    revealEl.style.setProperty("--glow", c.glow); revealEl.classList.toggle("zom", zom); revealEl.hidden = false;
+    $("#boo").textContent = zom ? "Grrr!" : "Bú!";
     stageEl.className = "stage";
-    stageEl.innerHTML = '<div class="pop">' + ghostSVG(ghosts[i].c, "float") + "</div>"; sparks();
-    $("#rname").textContent = c.name + " je chycený!";
+    stageEl.innerHTML = '<div class="pop">' + ghostSVG(ghosts[i].c, "float") + "</div>"; if (!zom) sparks();
+    $("#rname").textContent = c.name + " " + c.je + "!";
     $("#rquote").textContent = "„" + c.line + "“";
     var left = ghosts.filter(function (g) { return !g.caught; }).length;
-    rnext.textContent = left ? "Hledat dalšího ducha" : "Všichni chyceni!";
-    rnext.onclick = left ? showPicker : finish;
-    jingle(); speak(c.line, true);
-    try { navigator.vibrate && navigator.vibrate([80, 60, 80, 60, 200]); } catch (e) {}
+    rnext.textContent = left ? "Hledat další tečku" : "Všichni chyceni!";
+    rnext.onclick = left ? function () { showPick(""); } : finish;
+    if (zom) { groan(c.hoo, 0.35); setTimeout(function () { speak(c.line, true); }, 900); }
+    else { jingle(); speak(c.line, true); }
+    try { navigator.vibrate && navigator.vibrate(zom ? [300, 80, 300] : [80, 60, 80, 60, 200]); } catch (e) {}
   }
   function begin(resume) {
     audio(); test = false;
@@ -506,25 +572,25 @@
   }
   function toIntro() {
     stopWatch(); hush(); wake(false); state = "intro"; test = false; $("#testbar").hidden = true;
-    picker.hidden = true; revealEl.hidden = true; target = null; titleEl.textContent = "Detektor duchů";
+    revealEl.hidden = true; target = null; titleEl.textContent = "Detektor duchů";
     intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; radar.classList.add("off");
     saved = loadSave(); resumeBtn.hidden = !saved; msg.textContent = "";
     ghosts = []; buildDots(); counterEl.textContent = "0/" + N; timeEl.textContent = "0:00"; catchBtn.disabled = true;
   }
   function finish() {
     state = "done"; finishedAt = Date.now(); clearSave(); stopWatch(); wake(false); radar.classList.add("off");
-    var t = "Všichni duchové jsou chyceni! Tvůj čas je " + mmss((finishedAt - startedAt) / 1000) + ".";
+    var t = "Všechna strašidla jsou chycená! Tvůj čas je " + mmss((finishedAt - startedAt) / 1000) + ".";
     sayEl.textContent = t; speak(t, true);
     tone(660, 0.2, "triangle", 0.12); setTimeout(function () { tone(880, 0.3, "triangle", 0.12); }, 220);
-    catchBtn.disabled = true; pickBtn.disabled = true; titleEl.textContent = "Detektor duchů";
+    catchBtn.disabled = true; titleEl.textContent = "Detektor duchů";
     /* závěr: všichni duchové pohromadě */
-    revealEl.style.setProperty("--glow", "#5fe3cf"); revealEl.hidden = false;
+    revealEl.style.setProperty("--glow", "#5fe3cf"); revealEl.classList.remove("zom"); revealEl.hidden = false;
     $("#boo").textContent = "Hurá!";
     stageEl.className = "troupe";
     stageEl.innerHTML = ghosts.map(function (g, i) { return '<div class="pop" style="animation-delay:' + (i * 0.15) + 's">' + ghostSVG(g.c, "float") + "</div>"; }).join("");
-    Array.prototype.forEach.call(stageEl.querySelectorAll(".float"), function (el, i) { el.style.animationDelay = (-i * 0.4) + "s"; });
-    $("#rname").textContent = "Všichni tři duchové jsou chyceni!";
-    $("#rquote").textContent = "Tvůj čas: " + mmss((finishedAt - startedAt) / 1000) + ". Duchové se ti klaní.";
+    Array.prototype.forEach.call(stageEl.querySelectorAll(".float, .shamble"), function (el, i) { el.style.animationDelay = (-i * 0.4) + "s"; });
+    $("#rname").textContent = "Všechna tři strašidla jsou chycená!";
+    $("#rquote").textContent = "Tvůj čas: " + mmss((finishedAt - startedAt) / 1000) + ". Strašidla se ti klaní.";
     rnext.textContent = "Nová hra"; rnext.onclick = toIntro;
   }
   catchBtn.addEventListener("click", function () {
@@ -553,17 +619,16 @@
     return "cold";
   }
   var bandText = {
-    here: ["Duch je přímo tady!", "Duch je přímo tady! Stiskni Chyť ducha."],
+    here: ["Je přímo tady!", "Je přímo tady! Stiskni Chyť ducha."],
     close: ["Skoro tam", "Skoro tam! Hledej kolem sebe."],
     strong: ["Silný signál", "Silný signál! Jsi blízko."],
-    weak: ["Slabý signál", "Slabý signál. Jdi k duchovi na radaru."],
-    cold: ["Studený signál", "Studený signál. Jdi k duchovi na radaru."]
+    weak: ["Slabý signál", "Slabý signál. Jdi k tečce na radaru."],
+    cold: ["Studený signál", "Studený signál. Jdi k tečce na radaru."]
   };
 
   function frame() {
     requestAnimationFrame(frame);
     var best = state === "play" ? nearest() : null;
-    pickBtn.disabled = state !== "play";
     var hd = curHeading(), tgt = 0;
     if (best) {
       var d = best.d, br = bearing(pos, best.g);
@@ -577,24 +642,35 @@
       stateEl.textContent = bt[0]; stateEl.className = "state" + (band === "here" || band === "close" ? " alert" : band === "strong" ? " warn" : "");
       if (band !== lastBand) { lastBand = band; sayEl.textContent = bt[1]; speak(bt[1]); }
       catchBtn.disabled = band !== "here";
-      /* radar: jen hledaný duch, měřítko 60 m, ve středu jsi ty */
-      var el = dots[best.i];
-      if (el) {
-        var r = Math.min(d, 60) / 60 * 40;
-        el.style.left = (50 + r * Math.sin(rad(ang))) + "%"; el.style.top = (50 - r * Math.cos(rad(ang))) + "%";
-        el.classList.toggle("here", band === "here");
-      }
       var far = origin ? dist(pos, origin) : 0;
       hintEl.textContent = "GPS ±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " (nahoře je sever)" : "") + (far > 120 ? " · Jsi daleko od startu, vrať se." : "");
     } else if (state === "done") {
       valueEl.innerHTML = "0<small>m</small>"; stateEl.textContent = "Hotovo"; stateEl.className = "state";
       hintEl.textContent = "";
+    } else if (state === "pick") {
+      valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Vyber tečku"; stateEl.className = "state warn"; catchBtn.disabled = true;
+      hintEl.textContent = pos ? "GPS ±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " (nahoře je sever)" : "") : "";
     } else {
       if (state === "intro") { valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Čeká na start"; stateEl.className = "state"; }
     }
+    /* radar: ve středu jsi ty, měřítko 60 m. Výběr: všechny tečky. Hra: jen zamčená. Chycení: jejich obrázek. */
+    if (pos && (state === "pick" || state === "play")) {
+      var hh = hd.h === null ? 0 : hd.h;
+      ghosts.forEach(function (g, i) {
+        var el = dots[i]; if (!el) return;
+        var gd = dist(pos, g), rel = bearing(pos, g) - hh, r = Math.min(gd, 60) / 60 * 40;
+        el.style.left = (50 + r * Math.sin(rad(rel))) + "%"; el.style.top = (50 - r * Math.cos(rad(rel))) + "%";
+        var cls = g.caught ? "found" : state === "pick" ? "pick" : i === target ? "tgt" + (gd <= catchR() ? " here" : "") : "";
+        if (el.dataset.cls !== cls) {
+          el.dataset.cls = cls; el.className = "dot " + cls;
+          el.innerHTML = g.caught ? ghostSVG(g.c) : cls ? "?" : "";
+          el.disabled = state !== "pick" || g.caught; el.tabIndex = el.disabled ? -1 : 0;
+        }
+      });
+    }
     level += (tgt - level) * 0.1;
     for (var i = 0; i < leds.length; i++) leds[i].classList.toggle("on", state === "play" && level >= i + 0.5);
-    if (state === "play" || state === "done") {
+    if (state === "play" || state === "pick" || state === "done") {
       var left = ghosts.filter(function (g) { return !g.caught; }).length;
       counterEl.textContent = (N - left) + "/" + N;
       timeEl.textContent = mmss(((state === "done" ? finishedAt : Date.now()) - startedAt) / 1000);
@@ -608,7 +684,7 @@
     var now = performance.now();
     if (dir === lastDir || now - lastDirAt < 6000) return;
     lastDir = dir; lastDirAt = now;
-    var t = "Duch je " + dir + ".";
+    var t = "Tečka je " + dir + ".";
     speak(t);
   }
   /* Duch houká z reproduktoru: čím blíž, tím hlasitěji a častěji */
@@ -626,11 +702,26 @@
     g.gain.exponentialRampToValueAtTime(vol, n + 0.65); g.gain.exponentialRampToValueAtTime(0.0001, n + 1.4);
     o.connect(g); g.connect(c.destination); o.start(n); lfo.start(n); o.stop(n + 1.45); lfo.stop(n + 1.45);
   }
+  /* Zombie neházká, ale chrčí: nízký drsný tón přes filtr */
+  function groan(f, vol) {
+    if (!soundOn) return;
+    var c = audio(); if (!c) return;
+    var n = c.currentTime, o = c.createOscillator(), o2 = c.createOscillator(), flt = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    o.type = "sawtooth"; o2.type = "square"; flt.type = "lowpass"; flt.Q.value = 6;
+    lfo.frequency.value = 9; lg.gain.value = f * 0.12; lfo.connect(lg); lg.connect(o.frequency); lg.connect(o2.frequency);
+    o.frequency.setValueAtTime(f, n); o.frequency.linearRampToValueAtTime(f * 1.15, n + 0.5); o.frequency.exponentialRampToValueAtTime(f * 0.75, n + 1.5);
+    o2.frequency.setValueAtTime(f * 1.01, n); o2.frequency.exponentialRampToValueAtTime(f * 0.76, n + 1.5);
+    flt.frequency.setValueAtTime(300, n); flt.frequency.linearRampToValueAtTime(900, n + 0.45); flt.frequency.exponentialRampToValueAtTime(220, n + 1.5);
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.2); g.gain.setValueAtTime(vol, n + 0.9); g.gain.exponentialRampToValueAtTime(0.0001, n + 1.6);
+    o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(c.destination);
+    [o, o2, lfo].forEach(function (x) { x.start(n); x.stop(n + 1.65); });
+  }
   function hooLoop() {
     var b = state === "play" ? nearest() : null, now = performance.now();
     if (b && now >= nextHoo && b.d > catchR()) {
       var k = clamp(1 - (b.d - 5) / 55, 0, 1);
-      hoo(CHARS[b.g.c].hoo, 0.05 + 0.3 * k);
+      var ch = CHARS[b.g.c];
+      if (ch.type === "zombie") groan(ch.hoo, 0.06 + 0.3 * k); else hoo(ch.hoo, 0.05 + 0.3 * k);
       nextHoo = now + 6500 - 4000 * k;
     }
     setTimeout(hooLoop, 250);
@@ -650,7 +741,6 @@
   resumeBtn.addEventListener("click", function () { begin(true); });
   testBtn.addEventListener("click", startTest);
   $("#newgame").addEventListener("click", toIntro);
-  pickBtn.addEventListener("click", function () { if (state === "play") { target = null; save(); showPicker(); } });
   $("#tl").addEventListener("click", function () { testHeading = (testHeading - 30 + 360) % 360; });
   $("#tr").addEventListener("click", function () { testHeading = (testHeading + 30) % 360; });
   $("#tf").addEventListener("click", function () { if (test && pos) pos = offset(pos, 3, testHeading); });
