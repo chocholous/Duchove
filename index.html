@@ -224,6 +224,7 @@
       <button class="btn primary" id="begin" type="button">Hledat duchy</button>
       <button class="btn" id="resume" type="button" hidden>Pokračovat v rozehrané hře</button>
       <button class="btn" id="testbtn" type="button">Zkouška doma bez GPS</button>
+      <button class="btn" id="sndtest" type="button">Test zvuku</button>
     </div>
     <p class="msg" id="msg" aria-live="polite"></p>
   </div>
@@ -340,14 +341,54 @@
   }
 
   /* ---------- Zvuk, hlas, displej ---------- */
-  var ctx = null, soundOn = true, voiceOn = true, lock = null;
+  var ctx = null, master = null, soundOn = true, voiceOn = true, lock = null, unlocked = false, silentEl = null, csVoice = null, utt = null;
   function audio() {
     try {
-      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (ctx.state === "suspended") ctx.resume();
+      if (!ctx) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        /* společný výstup s kompresorem: víc zvuků naráz se nepřebudí do chrčení */
+        master = ctx.createDynamicsCompressor(); master.threshold.value = -10; master.ratio.value = 6;
+        master.connect(ctx.destination);
+      }
+      /* iOS po zamčení displeje přepne kontext na "interrupted", jiné prohlížeče na "suspended" */
+      if (ctx.state !== "running") ctx.resume().catch(function () {});
     } catch (e) { ctx = null; }
     return ctx;
   }
+  function out() { return master || ctx.destination; }
+  /* Krátké ticho ve WAV: přehrané přes <audio> přepne iPhone do režimu přehrávání, takže zvuk hraje i s vypínačem ticha */
+  function silentWav() {
+    var n = 4000, b = new Uint8Array(44 + n), v = new DataView(b.buffer), w = function (o, t) { for (var i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); };
+    w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true);
+    for (var i = 0; i < n; i++) b[44 + i] = 128;
+    var str = ""; for (var j = 0; j < b.length; j++) str += String.fromCharCode(b[j]);
+    return "data:audio/wav;base64," + btoa(str);
+  }
+  /* Volá se při každém ťuknutí: odemkne zvuk i hlas (prohlížeče to dovolí jen během dotyku) */
+  function unlock() {
+    var c = audio();
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+    if (c) {
+      try { var buf = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination); src.start(0); } catch (e) {}
+    }
+    try {
+      if (!silentEl) { silentEl = new Audio(silentWav()); silentEl.loop = true; silentEl.setAttribute("playsinline", ""); silentEl.volume = 0.01; }
+      if (silentEl.paused) { var pr = silentEl.play(); if (pr && pr.catch) pr.catch(function () {}); }
+    } catch (e) {}
+    if (!unlocked && "speechSynthesis" in window) {
+      unlocked = true;
+      try { var u = new SpeechSynthesisUtterance(" "); u.volume = 0; u.lang = "cs-CZ"; speechSynthesis.speak(u); } catch (e) {}
+    }
+  }
+  ["pointerdown", "touchend", "click", "keydown"].forEach(function (ev) { document.addEventListener(ev, unlock, true); });
+  function pickVoice() {
+    try {
+      var vs = speechSynthesis.getVoices() || [];
+      csVoice = vs.filter(function (v) { return /^cs/i.test(v.lang); })[0] || null;
+    } catch (e) {}
+  }
+  if ("speechSynthesis" in window) { pickVoice(); try { speechSynthesis.addEventListener("voiceschanged", pickVoice); } catch (e) { speechSynthesis.onvoiceschanged = pickVoice; } }
   function tone(f, d, type, v, f2) {
     if (!soundOn) return;
     var c = audio(); if (!c) return;
@@ -355,7 +396,7 @@
     o.type = type || "sine"; o.frequency.setValueAtTime(f, n);
     if (f2) o.frequency.exponentialRampToValueAtTime(f2, n + d);
     g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(v || 0.1, n + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, n + d);
-    o.connect(g); g.connect(c.destination); o.start(n); o.stop(n + d + 0.02);
+    o.connect(g); g.connect(out()); o.start(n); o.stop(n + d + 0.02);
   }
   var lastSpeak = 0;
   function speak(text, force) {
@@ -366,8 +407,13 @@
     try {
       if (!("speechSynthesis" in window)) return;
       var u = new SpeechSynthesisUtterance(text.toLowerCase());
-      u.lang = "cs-CZ"; u.pitch = 0.6; u.rate = 0.95;
-      speechSynthesis.cancel(); speechSynthesis.speak(u);
+      u.lang = "cs-CZ"; u.pitch = 0.6; u.rate = 0.95; if (csVoice) u.voice = csVoice;
+      utt = u; /* držet odkaz, jinak ho Chrome uklidí a hlas utichne */
+      var ss = speechSynthesis;
+      if (ss.paused) ss.resume();
+      /* cancel() těsně před speak() Chrome i Safari občas spolknou, proto chvilka odstup */
+      if (ss.speaking || ss.pending) { ss.cancel(); setTimeout(function () { ss.speak(u); }, 120); }
+      else ss.speak(u);
     } catch (e) {}
   }
   function hush() { try { speechSynthesis.cancel(); } catch (e) {} }
@@ -378,7 +424,11 @@
       } else if (!on && lock) { lock.release(); lock = null; }
     } catch (e) {}
   }
-  document.addEventListener("visibilitychange", function () { if (!document.hidden && state === "play") wake(true); });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    if (state === "play" || state === "pick") wake(true);
+    if (ctx && ctx.state !== "running") ctx.resume().catch(function () {});
+  });
 
   /* ---------- Zeměpis ---------- */
   var R = 6371000, rad = function (d) { return d * Math.PI / 180; };
@@ -700,7 +750,7 @@
     g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.12);
     g.gain.setValueAtTime(vol, n + 0.4); g.gain.exponentialRampToValueAtTime(vol * 0.3, n + 0.5);
     g.gain.exponentialRampToValueAtTime(vol, n + 0.65); g.gain.exponentialRampToValueAtTime(0.0001, n + 1.4);
-    o.connect(g); g.connect(c.destination); o.start(n); lfo.start(n); o.stop(n + 1.45); lfo.stop(n + 1.45);
+    o.connect(g); g.connect(out()); o.start(n); lfo.start(n); o.stop(n + 1.45); lfo.stop(n + 1.45);
   }
   /* Zombie neházká, ale chrčí: nízký drsný tón přes filtr */
   function groan(f, vol) {
@@ -713,7 +763,7 @@
     o2.frequency.setValueAtTime(f * 1.01, n); o2.frequency.exponentialRampToValueAtTime(f * 0.76, n + 1.5);
     flt.frequency.setValueAtTime(300, n); flt.frequency.linearRampToValueAtTime(900, n + 0.45); flt.frequency.exponentialRampToValueAtTime(220, n + 1.5);
     g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(vol, n + 0.2); g.gain.setValueAtTime(vol, n + 0.9); g.gain.exponentialRampToValueAtTime(0.0001, n + 1.6);
-    o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(c.destination);
+    o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(out());
     [o, o2, lfo].forEach(function (x) { x.start(n); x.stop(n + 1.65); });
   }
   function hooLoop() {
@@ -740,6 +790,16 @@
   beginBtn.addEventListener("click", function () { begin(false); });
   resumeBtn.addEventListener("click", function () { begin(true); });
   testBtn.addEventListener("click", startTest);
+  $("#sndtest").addEventListener("click", function () {
+    soundOn = true; voiceOn = true; unlock();
+    jingle(); setTimeout(function () { hoo(400, 0.3); }, 700); setTimeout(function () { groan(110, 0.3); }, 2300);
+    setTimeout(function () { speak("Zvuk funguje. Slyšíš mě?", true); }, 4000);
+    var c = ctx ? ctx.state : "žádný";
+    msg.textContent = "Hraje melodie, houkání a chrčení, pak promluví hlas. " +
+      (c !== "running" ? "Zvuk je zatím zablokovaný (" + c + "), ťukni znovu. " : "") +
+      (!("speechSynthesis" in window) ? "Tenhle prohlížeč neumí mluvit. " : !csVoice ? "Telefon nemá český hlas, hlas může mluvit anglicky nebo mlčet. " : "") +
+      "Nic neslyšíš? Zesil hlasitost a na iPhonu vypni tichý režim.";
+  });
   $("#newgame").addEventListener("click", toIntro);
   $("#tl").addEventListener("click", function () { testHeading = (testHeading - 30 + 360) % 360; });
   $("#tr").addEventListener("click", function () { testHeading = (testHeading + 30) % 360; });
