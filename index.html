@@ -928,12 +928,29 @@
   function packTags(t) { var o = {}; KEEP.forEach(function (k) { if (t && t[k] != null) o[k] = t[k]; }); return o; }
   function packGeom(g) { var f = []; (g || []).forEach(function (x) { f.push(r6(x.lat), r6(x.lon)); }); return f; }
   function unGeom(f) { var g = []; for (var i = 0; i + 1 < f.length; i += 2) g.push({ lat: f[i], lon: f[i + 1] }); return g; }
-  function packEls(els) {
-    return els.map(function (e) {
-      if (e.type === "node") return ["n", packTags(e.tags), [r6(e.lat), r6(e.lon)]];
-      if (e.type === "way") return ["w", packTags(e.tags), packGeom(e.geometry)];
-      return ["r", packTags(e.tags), (e.members || []).filter(function (m) { return m.type === "way" && m.geometry; }).map(function (m) { return [m.role || "", packGeom(m.geometry)]; })];
+  /* Oříznutá geometrie (okraj výřezu) může mít prázdná místa: rozdělí se na celé souvislé kusy */
+  function partsOf(g) {
+    var parts = [], cur = [];
+    (g || []).forEach(function (x) {
+      if (x && typeof x.lat === "number" && typeof x.lon === "number") cur.push(x);
+      else { if (cur.length > 1) parts.push(cur); cur = []; }
     });
+    if (cur.length > 1) parts.push(cur);
+    return parts;
+  }
+  function packEls(els) {
+    var out = [];
+    (els || []).forEach(function (e) {
+      if (!e) return;
+      if (e.type === "node") { if (typeof e.lat === "number") out.push(["n", packTags(e.tags), [r6(e.lat), r6(e.lon)]]); return; }
+      if (e.type === "way") { partsOf(e.geometry).forEach(function (p) { out.push(["w", packTags(e.tags), packGeom(p)]); }); return; }
+      if (e.type === "relation") {
+        var mem = [];
+        (e.members || []).forEach(function (m) { if (m && m.type === "way") partsOf(m.geometry).forEach(function (p) { mem.push([m.role || "", packGeom(p)]); }); });
+        if (mem.length) out.push(["r", packTags(e.tags), mem]);
+      }
+    });
+    return out;
   }
   function unpackEls(pk) {
     return pk.map(function (x) {
@@ -957,22 +974,23 @@
        malé limity (čas, velikost) pustí dotaz na přetíženém serveru dřív na řadu */
     var sw = offset(offset(o, 110, 180), 110, 270), ne = offset(offset(o, 110, 0), 110, 90);
     var bb = sw.lat.toFixed(6) + "," + sw.lon.toFixed(6) + "," + ne.lat.toFixed(6) + "," + ne.lon.toFixed(6);
+    /* domy, areály a cesty celé (ať je jasné, co je uvnitř); jen řeky a vodní toky oříznuté, jsou obrovské */
     var q = "[out:json][timeout:10][maxsize:16777216][bbox:" + bb + "];(" +
-      "way[highway];way[building];relation[building];" +
-      "way[natural=water];relation[natural=water];way[waterway];" +
+      "way[highway];way[building];relation[building];way[natural=water];" +
       "way[landuse~\"^(railway|construction|military|landfill|quarry|brownfield|allotments|farmyard|garages)$\"];" +
       "relation[landuse~\"^(railway|construction|military|allotments|farmyard|garages)$\"];" +
       "way[amenity~\"^(school|kindergarten|prison|swimming_pool)$\"];relation[amenity~\"^(school|kindergarten|prison)$\"];" +
       "way[leisure~\"^(garden|swimming_pool)$\"];" +
       "way[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
       "node[barrier~\"^(gate|lift_gate|swing_gate|sliding_gate|turnstile|full-height_turnstile)$\"];" +
-      ");out tags geom(" + bb + ");";
+      ");out tags geom;(relation[natural=water];way[waterway];);out tags geom(" + bb + ");";
     return overpass(q, 15000).then(function (els) {
-      var pk = packEls(els);
+      var pk = packEls(els), area = parseWalkArea(o, unpackEls(pk)); /* stejná data jako z paměti */
       try { localStorage.setItem(MAP_KEY, JSON.stringify({ lat: o.lat, lon: o.lon, at: Date.now(), pk: pk })); } catch (e) {}
       mapInfo = { src: overpassHost, ms: performance.now() - t0 };
-      return parseWalkArea(o, unpackEls(pk)); /* stejná data jako z paměti */
-    }, function (err) {
+      return area;
+    }).catch(function (err) {
+      if (!mapInfo || mapInfo.src.indexOf("chyba") < 0) mapInfo = { src: "chyba: " + String(err && err.message || err).slice(0, 60), ms: performance.now() - t0 };
       var old = cachedMap(o, 365 * 86400000); /* bez sítě: starší mapa téhož místa je lepší než nic */
       if (old) { mapInfo = { src: "starší z paměti", ms: performance.now() - t0 }; return parseWalkArea(o, old); }
       throw err;
@@ -1397,18 +1415,20 @@
     var gen = ++bootGen, mine = ghosts;
     /* pěšky strašidla smějí jen na chodníky a cesty venku; bez mapy okolí se nehraje (kromě zkoušky doma) */
     var loadArea = function () {
-      return Promise.race([areaFor(origin), new Promise(function (r) { setTimeout(function () { r(null); }, 60000); })]);
+      return Promise.race([areaFor(origin), new Promise(function (r) { setTimeout(function () { r(null); }, 30000); })]);
     };
     var mapFail = false, failWhy = "map";
     var placing = mode === "walk" && !savedGame
       ? loadArea().then(function (area) {
           if (!area) { failWhy = "map"; return null; }
           failWhy = "paths";
-          pathPts = samplePaths(o, area.ways, 12, 55, area);
-          return placeOnPaths(o, area.ways, N, area);
-        })
+          try {
+            pathPts = samplePaths(o, area.ways, 12, 55, area);
+            return placeOnPaths(o, area.ways, N, area);
+          } catch (err) { failWhy = "map"; mapInfo = { src: "chyba: " + String(err && err.message || err).slice(0, 60), ms: 0 }; return null; }
+        }).catch(function () { return null; }) /* kalibrace se nikdy nesmí zaseknout */
       : Promise.resolve(null);
-    if (mode === "walk" && savedGame) loadArea().then(function (area) { if (area && gen === bootGen) pathPts = samplePaths(origin, area.ways, 12, 55, area); });
+    if (mode === "walk" && savedGame) loadArea().then(function (area) { try { if (area && gen === bootGen) pathPts = samplePaths(origin, area.ways, 12, 55, area); } catch (e) {} });
     /* když se čeká na mapu, děti zatím vyladí kompas: osmička ve vzduchu opravdu pomáhá */
     setTimeout(function () { if (gen === bootGen && state === "boot") { var t = "Zatím vylaď kompas. Zamávej detektorem ve vzduchu do velké osmičky."; sayEl.textContent = t; speak(t); } }, 2600);
     setTimeout(function () { if (gen === bootGen && state === "boot" && mode === "walk") { var t = "Hledám místa venku, kam se strašidla mohla schovat. Ještě chvilku mávej."; sayEl.textContent = t; speak(t); } }, 9000);
@@ -1425,6 +1445,7 @@
         var m = failWhy === "paths"
           ? "Kolem tebe nevidím chodníky ani cesty, kam se dá bezpečně dojít. Vyjdi na ulici nebo do parku a zkus to znovu."
           : "Nepodařilo se načíst mapu okolí. Bez ní nevím, kde je bezpečně venku, tak duchy neschovám. Zkus to za chvilku znovu.";
+        if (mapInfo && mapInfo.src.indexOf("chyba") === 0) m += " (" + mapInfo.src + ")";
         msg.textContent = m; speak(m, true); return;
       }
       radar.classList.remove("boot"); ambience(true);
