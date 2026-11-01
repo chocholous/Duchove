@@ -357,6 +357,35 @@
   @keyframes develop { from { opacity: 0; filter: brightness(2.2) blur(6px); } to { opacity: 1; filter: none; } }
   .photobtns { display: flex; gap: 10px; justify-content: center; opacity: 0; animation: rise 1s ease-out 1.6s forwards; }
   .reveal .photobtns .btn { width: auto; min-width: 92px; padding: 14px 22px; opacity: 1; animation: none; }
+  /* Duchokamera: živý obraz, šum, rámeček a šipky; nad zrnem a vinětací */
+  .gcam { position: fixed; inset: 0; z-index: 40; background: #000; overflow: hidden; }
+  .gcam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(.65) sepia(.25) hue-rotate(85deg) contrast(1.25) brightness(.72); }
+  .gcam canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  .gcam::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px), radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,.8) 100%); }
+  .gcam.flash::before { content: ""; position: absolute; inset: 0; z-index: 5; background: #e8f2ee; pointer-events: none; animation: gflash .5s ease-out forwards; }
+  @keyframes gflash { from { opacity: .9; } to { opacity: 0; } }
+  .ghud { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .gtop { position: absolute; top: max(14px, env(safe-area-inset-top, 0px)); left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 8px; font: 600 11px/1 var(--label, var(--mono)); letter-spacing: .3em; color: rgba(185, 214, 200, .8); }
+  .grec { width: 9px; height: 9px; border-radius: 50%; background: #c0524a; box-shadow: 0 0 8px #c0524a; animation: blinkt 1s steps(2) infinite; }
+  .gframe { position: absolute; inset: 16% 10% 26%; border: 1px solid rgba(185, 214, 200, .18); }
+  .gframe::before, .gframe::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(185, 214, 200, .35); }
+  .gframe::before { width: 26px; height: 1px; margin-left: -13px; }
+  .gframe::after { width: 1px; height: 26px; margin-top: -13px; }
+  .garrow { position: absolute; top: 44%; left: 4%; opacity: 0; transition: opacity .3s; color: #e9dfc9; text-shadow: 0 0 12px rgba(201, 164, 106, .8); }
+  .garrow.r { left: auto; right: 4%; }
+  .garrow .ms { font-size: 56px; }
+  .garrow.on { opacity: .9; animation: nudge .8s ease-in-out infinite; }
+  .garrow.r.on { animation-name: nudger; }
+  @keyframes nudge { 50% { transform: translateX(-8px); } }
+  @keyframes nudger { 50% { transform: translateX(8px); } }
+  .gbottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 0 20px max(20px, env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px; }
+  .gsigbar { height: 6px; border-radius: 3px; background: rgba(185, 214, 200, .12); overflow: hidden; }
+  .gsigbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, rgba(185,214,200,.7), #c9a46a, #c0524a); transition: width .15s; }
+  .gbtns { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 12px; align-items: center; }
+  .gbtns .btn { padding: 14px 8px; }
+  #gshot { padding: 20px 8px; opacity: .55; }
+  #gshot .ms { font-size: 44px; }
+  .gcam.ready #gshot { opacity: 1; color: #f2e6d8; border-color: rgba(201, 164, 106, .8); box-shadow: 0 0 34px rgba(201, 164, 106, .55); animation: breathe 1.2s ease-in-out infinite; }
   .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; width: min(86vw, 420px); margin-top: 12px; }
   .gallery img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 1px rgba(216, 214, 203, .14); }
   @media (prefers-reduced-motion: reduce) { .photo img, .photobtns { animation: none !important; opacity: 1; } }
@@ -550,6 +579,25 @@
     <input type="file" id="cam" accept="image/*" capture="environment" hidden>
     <div class="score" id="score" aria-hidden="true"></div>
     <button class="btn primary" id="rnext" type="button" aria-label="Dál" title="Dál"></button>
+  </div>
+</section>
+
+<section class="gcam" id="gcam" hidden aria-label="Duchokamera">
+  <video id="gvid" playsinline muted autoplay></video>
+  <canvas id="gfx" aria-hidden="true"></canvas>
+  <div class="ghud" aria-hidden="true">
+    <div class="gtop"><span class="grec"></span><span>SPEKTRÁLNÍ KAMERA</span></div>
+    <span class="garrow" id="gl"><span class="ms">keyboard_double_arrow_left</span></span>
+    <span class="garrow r" id="gr"><span class="ms">keyboard_double_arrow_right</span></span>
+    <div class="gframe"></div>
+  </div>
+  <div class="gbottom">
+    <div class="gsigbar"><i id="gsig"></i></div>
+    <div class="gbtns">
+      <button class="btn" id="gclose" type="button" aria-label="Zavřít kameru" title="Zavřít"><span class="ms" aria-hidden="true">close</span></button>
+      <button class="btn primary" id="gshot" type="button" aria-label="Vyfotit ducha" title="Vyfotit"><span class="ms" aria-hidden="true">photo_camera</span></button>
+      <span class="gspace"></span>
+    </div>
   </div>
 </section>
 
@@ -1952,7 +2000,7 @@
     cancelLater(); state = "reveal"; var c = CHARS[ghosts[i].c], zom = c.type === "zombie";
     revealEl.hidden = false; restartAnims(revealEl);
     stageEl.innerHTML = eyesSVG(zom); stageEl.hidden = false; revealIdx = i;
-    $("#photo").hidden = true; $("#sharephoto").hidden = true; $("#photobtns").hidden = false;
+    $("#photo").hidden = true; $("#sharephoto").hidden = true; $("#photobtns").hidden = false; $("#snap").hidden = false;
     $("#rname").textContent = "Nalezeno.";
     var clue = clues[i] || anyClue(mode === "car" ? CLUE_CAR : CLUE_ANY), spoken = "Nalezeno. " + clue;
     /* auto: scéna podle místa, u kterého strašidlo sedělo */
@@ -1976,101 +2024,25 @@
     after(900, function () { whisper(0.16, 2.2); });
     after(1500, function () { bell(147, 0.14, 5); });
     after(2300, function () { speak(spoken, true); });
-    after(2500, function () { speak("Teď vyfoť místo, kde jste ho našli. Možná ho na fotce uvidíš."); });
+    after(2500, function () { speak("Kdo to byl? Otevři duchokameru a najdi ho."); });
     vibe(zom ? [400, 120, 400] : [120, 90, 120]);
   }
   /* ---------- Fotka s duchem ----------
-     Děti vyfotí místo nálezu. Ve fotce se najde nejtmavší místo (stín) a duch se do něj vloží jako jeho opak:
-     světlejší, rozmazaná, průsvitná postava se slabě naznačenýma očima. Celá fotka dostane noční tón a zrno. */
+     Fotí se duchokamerou (níž). Když živá kamera nejde, vyfotí se běžná fotka a duch se do ní vloží. */
   var photos = [], revealIdx = -1, lastPhoto = null;
   function ghostLabel(i) {
     var g = ghosts[i] || {};
     if (mode === "car" && g.place && g.place.name0) return g.place.name0;
     return mode === "walk" && g.t ? TYPE_NAME[g.t] : "Strašidlo";
   }
-  function hauntPhoto(img, label) {
-    var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height, sc = Math.min(1, 1600 / Math.max(iw, ih));
-    var W = Math.max(1, Math.round(iw * sc)), H = Math.max(1, Math.round(ih * sc));
-    var cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-    var c = cv.getContext("2d"); c.drawImage(img, 0, 0, W, H);
-    var im = c.getImageData(0, 0, W, H), d = im.data;
-    /* 1) nejtmavší místo ve střední části fotky (stín), mírně přednost středu */
-    var G = 10, best = null;
-    for (var gy = 2; gy < G - 1; gy++) for (var gx = 1; gx < G - 1; gx++) {
-      var x0 = Math.floor(gx * W / G), x1 = Math.floor((gx + 1) * W / G), y0 = Math.floor(gy * H / G), y1 = Math.floor((gy + 1) * H / G), sum = 0, n = 0;
-      for (var y = y0; y < y1; y += 4) for (var x = x0; x < x1; x += 4) { var k = (y * W + x) * 4; sum += 0.3 * d[k] + 0.59 * d[k + 1] + 0.11 * d[k + 2]; n++; }
-      var score = sum / Math.max(1, n) + Math.abs(gx + 0.5 - G / 2) * 5 + Math.abs(gy + 0.5 - G * 0.55) * 3;
-      if (!best || score < best.s) best = { s: score, x: (gx + 0.5) * W / G, y: (gy + 0.5) * H / G };
-    }
-    /* 2) rozmazaná kopie (zmenšit a zvětšit) */
-    var sm = document.createElement("canvas"); sm.width = Math.max(1, Math.round(W / 16)); sm.height = Math.max(1, Math.round(H / 16));
-    sm.getContext("2d").drawImage(cv, 0, 0, sm.width, sm.height);
-    var bl = document.createElement("canvas"); bl.width = W; bl.height = H; var bc = bl.getContext("2d"); bc.imageSmoothingEnabled = true; bc.drawImage(sm, 0, 0, W, H);
-    var blur = bc.getImageData(0, 0, W, H).data;
-    /* 3) maska ducha: hlava, tělo, vlnitý lem; měkké okraje, dole se rozplývá */
-    var gh = Math.min(W, H) * 0.56, gw = gh * 0.6, r0 = gw / 2, cx = clamp(best.x, gw, W - gw), top = clamp(best.y - gh * 0.45, gh * 0.04, Math.max(gh * 0.04, H - gh * 0.95)), tilt = rnd(-0.09, 0.09);
-    /* maska se kreslí v malém rozlišení a zvětší: okraje jsou pak měkké jako mlha */
-    var DS = 6, ms = document.createElement("canvas"); ms.width = Math.ceil(W / DS); ms.height = Math.ceil(H / DS); var m = ms.getContext("2d");
-    m.scale(1 / DS, 1 / DS);
-    var P = new Path2D();
-    P.moveTo(-r0, r0); P.arc(0, r0, r0, Math.PI, 0);
-    P.bezierCurveTo(r0, gh * 0.45, r0 * 1.28, gh * 0.68, r0 * 1.18, gh * 0.86);
-    for (var w = 0; w < 4; w++) { var xa = r0 * 1.18 - 2 * r0 * 1.18 * (w / 4), xb = r0 * 1.18 - 2 * r0 * 1.18 * ((w + 1) / 4); P.quadraticCurveTo((xa + xb) / 2, gh * (w % 2 ? 1.0 : 0.76), xb, gh * 0.86); }
-    P.bezierCurveTo(-r0 * 1.28, gh * 0.68, -r0, gh * 0.45, -r0, r0); P.closePath();
-    m.translate(cx, top); m.rotate(tilt);
-    m.fillStyle = "rgba(255,255,255,.45)"; m.shadowColor = "#fff"; m.shadowBlur = gw * 0.08; m.fill(P);
-    m.translate(gw * 0.06, -gh * 0.02); m.fillStyle = "rgba(255,255,255,.3)"; m.fill(P); /* druhý, posunutý obrys: chvění */
-    var mk = document.createElement("canvas"); mk.width = W; mk.height = H; m = mk.getContext("2d");
-    m.imageSmoothingEnabled = true; m.drawImage(ms, 0, 0, W, H);
-    /* mlhavá nerovnost: náhodné skvrny přes celou postavu */
-    var nz = document.createElement("canvas"); nz.width = 14; nz.height = 18; var nc = nz.getContext("2d");
-    for (var ny = 0; ny < 18; ny++) for (var nx = 0; nx < 14; nx++) { nc.fillStyle = "rgba(0,0,0," + (0.45 + Math.random() * 0.55).toFixed(2) + ")"; nc.fillRect(nx, ny, 1, 1); }
-    m.globalCompositeOperation = "destination-in"; m.drawImage(nz, 0, 0, W, H);
-    var gr = m.createLinearGradient(0, top, 0, top + gh); gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(0.5, "rgba(0,0,0,.85)"); gr.addColorStop(1, "rgba(0,0,0,0)");
-    m.fillStyle = gr; m.fillRect(0, 0, W, H);
-    var mask = m.getImageData(0, 0, W, H).data;
-    /* 4) noční tón, duch jako opak stínu, vinětace, zrno */
-    for (var i = 0; i < d.length; i += 4) {
-      var p = i >> 2, px = p % W, py = (p / W) | 0, a = mask[i + 3] / 255;
-      var R = d[i], Gc = d[i + 1], B = d[i + 2];
-      if (a > 0.01) { R += (blur[i] - R) * a * 0.7; Gc += (blur[i + 1] - Gc) * a * 0.7; B += (blur[i + 2] - B) * a * 0.7; }
-      var L = 0.3 * R + 0.59 * Gc + 0.11 * B;
-      R = (R * 0.5 + L * 0.5) * 0.74; Gc = (Gc * 0.5 + L * 0.5) * 0.82; B = (B * 0.5 + L * 0.5) * 0.9 + 8;
-      if (a > 0.01) { var k2 = Math.min(0.8, a * 0.7); R += (226 - R) * k2; Gc += (240 - Gc) * k2; B += (236 - B) * k2; }
-      var vx = px / W - 0.5, vy = py / H - 0.5, v = 1 - (vx * vx + vy * vy) * 1.1, nz = (Math.random() - 0.5) * 20;
-      d[i] = clamp(R * v + nz, 0, 255); d[i + 1] = clamp(Gc * v + nz, 0, 255); d[i + 2] = clamp(B * v + nz, 0, 255);
-    }
-    c.putImageData(im, 0, 0);
-    /* 5) oči: dvě tmavé, rozostřené prázdné skvrny v hlavě */
-    c.save(); c.translate(cx, top); c.rotate(tilt);
-    c.filter = "blur(" + Math.round(gw * 0.04) + "px)";
-    c.fillStyle = "rgba(14,20,18,.32)"; c.shadowColor = "rgba(0,0,0,.4)"; c.shadowBlur = gw * 0.1;
-    [-1, 1].forEach(function (sd) { c.beginPath(); c.ellipse(sd * gw * 0.16, gw * 0.52, gw * 0.06, gw * 0.1, sd * 0.12, 0, Math.PI * 2); c.fill(); });
-    c.restore();
-    /* 6) jméno ducha a čas, jako na staré fotce z detektoru */
-    var now = new Date(), stamp = now.getDate() + ". " + (now.getMonth() + 1) + ". " + now.getFullYear() + "  " + now.getHours() + ":" + String(now.getMinutes()).padStart(2, "0") + "  ·  Detektor typ II";
-    c.textAlign = "left"; c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = W * 0.01;
-    c.font = "italic 500 " + Math.round(W * 0.045) + "px 'EB Garamond', Georgia, serif"; c.fillStyle = "rgba(232,238,234,.9)"; c.fillText(label, W * 0.045, H - W * 0.075);
-    c.font = Math.round(W * 0.022) + "px 'IBM Plex Mono', Menlo, monospace"; c.fillStyle = "rgba(185,214,200,.75)"; c.fillText(stamp, W * 0.045, H - W * 0.035);
-    return cv;
-  }
-  $("#snap").addEventListener("click", function () { unlock(); var cam = $("#cam"); cam.value = ""; cam.click(); });
+  $("#snap").addEventListener("click", function () { openGhostCam(); });
   $("#cam").addEventListener("change", function () {
     var f = this.files && this.files[0], i = revealIdx; if (!f || i < 0) return;
     var url = URL.createObjectURL(f), img = new Image();
     img.onload = function () {
       var label = ghostLabel(i);
       (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () {
-        var cv = hauntPhoto(img, label); URL.revokeObjectURL(url);
-        cv.toBlob(function (blob) {
-          if (!blob) return;
-          var out = URL.createObjectURL(blob);
-          lastPhoto = { blob: blob, url: out, name: label };
-          photos[i] = lastPhoto;
-          $("#photoimg").src = out; $("#photo").hidden = false; stageEl.hidden = true; $("#sharephoto").hidden = false;
-          whisper(0.14, 2); bell(220, 0.1, 3);
-          speak("Podívej se na fotku. Je tam?", true);
-        }, "image/jpeg", 0.88);
+        photoFromFile(img, i); URL.revokeObjectURL(url);
       });
     };
     img.onerror = function () { URL.revokeObjectURL(url); speak("Fotku se nepodařilo otevřít. Zkus to znovu.", true); };
@@ -2083,6 +2055,347 @@
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: lastPhoto.name }).catch(function () {}); return; }
     var a = document.createElement("a"); a.href = lastPhoto.url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
   });
+
+  /* ---------- Duchokamera ----------
+     Po nálezu děti otevřou kameru. Duch se schovává v jednom směru kolem nich. Musí se s telefonem točit:
+     kamera šumí a šipky ukazují, kam se otočit. Když na něj zamíří a chvíli drží, zjeví se. Občas uhne.
+     Vyfotit jde, až když je vidět. Každý duch ve hře vypadá jinak. */
+  var LOOKS = ["pani", "mnich", "prosteradlo", "stin", "orby", "zombie"];
+  var LOOK_NAME = { pani: "Bílá paní", mnich: "Mnich v kápi", prosteradlo: "Malý duch", stin: "Stínový muž", orby: "Bludná světla", zombie: "Chodící mrtvý" };
+  function lookOf(i) {
+    var g = ghosts[i];
+    if (!g.look) {
+      var used = ghosts.map(function (x) { return x.look; }).filter(Boolean), free = LOOKS.filter(function (l) { return used.indexOf(l) < 0; });
+      var zom = (CHARS[g.c] || {}).type === "zombie";
+      if (zom && free.indexOf("zombie") >= 0 && Math.random() < 0.6) g.look = "zombie";
+      else { var pool = free.length ? free : LOOKS; g.look = pool[Math.floor(Math.random() * pool.length)]; }
+      save();
+    }
+    return g.look;
+  }
+  /* Postavy se kreslí jednou do průhledného plátna 400×640 a pak se jen skládají do obrazu */
+  var spriteCache = {};
+  function sprite(look) {
+    if (spriteCache[look]) return spriteCache[look];
+    var cv = document.createElement("canvas"); cv.width = 400; cv.height = 640;
+    var c = cv.getContext("2d"), lg = function (y0, y1, a0, a1, col) { var g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, "rgba(" + col + "," + a0 + ")"); g.addColorStop(1, "rgba(" + col + "," + a1 + ")"); return g; };
+    var glow = function (col, b) { c.shadowColor = col; c.shadowBlur = b; };
+    c.lineJoin = "round"; c.lineCap = "round";
+    if (look === "pani") {
+      /* vysoká žena v závoji, šaty se rozplývají */
+      glow("rgba(230,245,240,.9)", 40);
+      c.fillStyle = lg(60, 640, .85, 0, "232,242,238");
+      c.beginPath(); c.moveTo(200, 70);
+      c.bezierCurveTo(250, 70, 262, 120, 258, 170); c.bezierCurveTo(300, 210, 300, 300, 286, 360);
+      c.bezierCurveTo(330, 470, 350, 560, 360, 640); c.lineTo(40, 640);
+      c.bezierCurveTo(50, 560, 70, 470, 114, 360); c.bezierCurveTo(100, 300, 100, 210, 142, 170);
+      c.bezierCurveTo(138, 120, 150, 70, 200, 70); c.fill();
+      c.shadowBlur = 0; c.fillStyle = "rgba(20,26,24,.55)";
+      [[183, 150], [217, 150]].forEach(function (e) { c.beginPath(); c.ellipse(e[0], e[1], 9, 13, 0, 0, Math.PI * 2); c.fill(); });
+      c.strokeStyle = "rgba(240,250,246,.35)"; c.lineWidth = 2;
+      for (var k = 0; k < 7; k++) { c.beginPath(); c.moveTo(150 + k * 17, 110); c.bezierCurveTo(140 + k * 19, 260, 120 + k * 26, 420, 90 + k * 37, 600); c.stroke(); }
+    } else if (look === "mnich") {
+      /* kápě a roucho, místo obličeje tma a dvě žhavé tečky */
+      glow("rgba(200,215,210,.7)", 30);
+      c.fillStyle = lg(40, 640, .8, .05, "205,214,210");
+      c.beginPath(); c.moveTo(200, 40);
+      c.bezierCurveTo(260, 60, 285, 140, 280, 210); c.bezierCurveTo(320, 260, 330, 400, 340, 640);
+      c.lineTo(60, 640); c.bezierCurveTo(70, 400, 80, 260, 120, 210); c.bezierCurveTo(115, 140, 140, 60, 200, 40); c.fill();
+      c.shadowBlur = 0;
+      var fg = c.createRadialGradient(200, 165, 6, 200, 165, 62); fg.addColorStop(0, "rgba(0,0,0,.95)"); fg.addColorStop(1, "rgba(0,0,0,0)");
+      c.fillStyle = fg; c.beginPath(); c.ellipse(200, 168, 48, 62, 0, 0, Math.PI * 2); c.fill();
+      glow("rgba(255,170,90,1)", 14); c.fillStyle = "rgba(255,190,120,.95)";
+      [[184, 160], [216, 160]].forEach(function (e) { c.beginPath(); c.arc(e[0], e[1], 4, 0, Math.PI * 2); c.fill(); });
+    } else if (look === "prosteradlo") {
+      /* malý duch v prostěradle, s dírami na oči */
+      glow("rgba(240,250,246,.9)", 34);
+      c.fillStyle = lg(230, 640, .9, .15, "240,246,243");
+      c.beginPath(); c.moveTo(110, 600); c.lineTo(110, 360); c.bezierCurveTo(110, 220, 290, 220, 290, 360); c.lineTo(290, 600);
+      for (var w = 0; w < 5; w++) c.quadraticCurveTo(290 - w * 36 - 18, w % 2 ? 640 : 585, 290 - (w + 1) * 36, 600);
+      c.fill(); c.shadowBlur = 0; c.fillStyle = "rgba(10,12,12,.85)";
+      [[170, 340], [230, 340]].forEach(function (e) { c.beginPath(); c.ellipse(e[0], e[1], 13, 19, 0, 0, Math.PI * 2); c.fill(); });
+      c.beginPath(); c.ellipse(200, 395, 10, 13, 0, 0, Math.PI * 2); c.fill();
+    } else if (look === "stin") {
+      /* stínový muž v klobouku: tmavá silueta s bílýma tečkama */
+      glow("rgba(0,0,0,1)", 30); c.fillStyle = "rgba(4,6,6,.92)";
+      c.beginPath(); c.ellipse(200, 92, 92, 14, 0, 0, Math.PI * 2); c.fill();
+      c.fillRect(150, 30, 100, 64);
+      c.beginPath(); c.ellipse(200, 128, 40, 48, 0, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.moveTo(140, 190); c.bezierCurveTo(100, 200, 92, 260, 96, 360); c.lineTo(120, 480); c.lineTo(132, 640); c.lineTo(268, 640); c.lineTo(280, 480); c.lineTo(304, 360); c.bezierCurveTo(308, 260, 300, 200, 260, 190); c.closePath(); c.fill();
+      c.shadowBlur = 0; glow("rgba(255,255,255,1)", 10); c.fillStyle = "rgba(255,255,255,.95)";
+      [[186, 126], [214, 126]].forEach(function (e) { c.beginPath(); c.arc(e[0], e[1], 3, 0, Math.PI * 2); c.fill(); });
+    } else if (look === "orby") {
+      /* bludná světla: několik zářících koulí, jedna s ocasem */
+      [[200, 220, 46], [128, 330, 26], [270, 380, 32], [170, 470, 18], [250, 140, 14], [96, 180, 11]].forEach(function (o, k) {
+        var g = c.createRadialGradient(o[0], o[1], 0, o[0], o[1], o[2] * 2.4);
+        g.addColorStop(0, "rgba(255,255,250,.95)"); g.addColorStop(0.25, "rgba(210,240,228,.6)"); g.addColorStop(1, "rgba(185,214,200,0)");
+        c.fillStyle = g; c.beginPath(); c.arc(o[0], o[1], o[2] * 2.4, 0, Math.PI * 2); c.fill();
+        if (!k) { var t = c.createLinearGradient(o[0], o[1], o[0] - 150, o[1] + 170); t.addColorStop(0, "rgba(220,240,232,.45)"); t.addColorStop(1, "rgba(220,240,232,0)"); c.strokeStyle = t; c.lineWidth = 18; c.beginPath(); c.moveTo(o[0], o[1]); c.quadraticCurveTo(o[0] - 40, o[1] + 120, o[0] - 150, o[1] + 170); c.stroke(); }
+      });
+    } else {
+      /* chodící mrtvý: shrbená postava s nataženýma rukama */
+      glow("rgba(170,200,150,.7)", 26); c.fillStyle = lg(60, 640, .8, .1, "168,186,150");
+      c.beginPath(); c.ellipse(214, 118, 38, 46, 0.25, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.moveTo(170, 160); c.bezierCurveTo(130, 190, 118, 280, 130, 360); c.lineTo(150, 470); c.lineTo(132, 640); c.lineTo(190, 640); c.lineTo(206, 500); c.lineTo(226, 640); c.lineTo(284, 640); c.lineTo(262, 460); c.bezierCurveTo(286, 360, 290, 250, 262, 190); c.closePath(); c.fill();
+      c.strokeStyle = "rgba(168,186,150,.75)"; c.lineWidth = 26;
+      c.beginPath(); c.moveTo(250, 220); c.bezierCurveTo(300, 230, 340, 236, 376, 228); c.stroke();
+      c.beginPath(); c.moveTo(232, 250); c.bezierCurveTo(290, 270, 330, 280, 366, 282); c.stroke();
+      c.shadowBlur = 0; glow("rgba(230,240,180,1)", 8); c.fillStyle = "rgba(235,240,190,.9)";
+      [[202, 112], [230, 118]].forEach(function (e) { c.beginPath(); c.arc(e[0], e[1], 4, 0, Math.PI * 2); c.fill(); });
+    }
+    /* změkčení: rozmazaná kopie (zmenšit a zvětšit) smíchaná s ostrou, pak mlhavé díry, ať to není nálepka */
+    var sharp = document.createElement("canvas"); sharp.width = 400; sharp.height = 640; sharp.getContext("2d").drawImage(cv, 0, 0);
+    var sm = document.createElement("canvas"); sm.width = 50; sm.height = 80; var smc = sm.getContext("2d"); smc.imageSmoothingEnabled = true; smc.drawImage(cv, 0, 0, 50, 80);
+    c.setTransform(1, 0, 0, 1, 0, 0); c.shadowBlur = 0; c.globalCompositeOperation = "source-over"; c.clearRect(0, 0, 400, 640);
+    c.imageSmoothingEnabled = true; c.globalAlpha = 1; c.drawImage(sm, 0, 0, 400, 640);
+    c.globalAlpha = look === "stin" ? 0.7 : 0.5; c.drawImage(sharp, 0, 0);
+    c.globalAlpha = 1; c.globalCompositeOperation = "destination-out";
+    for (var mb = 0; mb < 70; mb++) {
+      var bx = rnd(0, 400), by = rnd(0, 640), br = rnd(18, 70), bg2 = c.createRadialGradient(bx, by, 0, bx, by, br);
+      bg2.addColorStop(0, "rgba(0,0,0," + rnd(0.12, 0.42).toFixed(2) + ")"); bg2.addColorStop(1, "rgba(0,0,0,0)");
+      c.fillStyle = bg2; c.fillRect(bx - br, by - br, br * 2, br * 2);
+    }
+    var fade = c.createLinearGradient(0, 380, 0, 640); fade.addColorStop(0, "rgba(0,0,0,0)"); fade.addColorStop(1, "rgba(0,0,0,.85)");
+    c.fillStyle = fade; c.fillRect(0, 0, 400, 640);
+    c.globalCompositeOperation = "source-over";
+    spriteCache[look] = cv; return cv;
+  }
+  /* šum na obrazovce kamery: pár předpočítaných snímků */
+  var noiseFrames = [];
+  function makeNoise() {
+    for (var f = 0; f < 4; f++) {
+      var nv = document.createElement("canvas"); nv.width = 160; nv.height = 160; var nc = nv.getContext("2d"), id = nc.createImageData(160, 160);
+      for (var p = 0; p < id.data.length; p += 4) { var v = Math.random() * 255; id.data[p] = v * 0.85; id.data[p + 1] = v; id.data[p + 2] = v * 0.92; id.data[p + 3] = 255; }
+      nc.putImageData(id, 0, 0); noiseFrames.push(nv);
+    }
+  }
+  var gcamEl = $("#gcam"), gvid = $("#gvid"), gfx = $("#gfx"), gc2 = gfx.getContext("2d"), gStream = null;
+  var gcam = null; /* stav kamery: {i, bear, vh, lock, amt, slipped, seen, t, ready, raf} */
+  function wrap180(a) { return ((a % 360) + 540) % 360 - 180; }
+  function openGhostCam() {
+    var i = revealIdx; if (i < 0) return;
+    unlock(); if (!noiseFrames.length) makeNoise();
+    var look = lookOf(i);
+    gcam = { i: i, look: look, bear: rnd(0, 360), vh: 0, lock: 0, amt: 0, slipped: false, seen: false, ready: false, t: performance.now(), dragX: null, wasLocked: false };
+    gcamEl.hidden = false; gcamEl.classList.remove("ready", "flash"); $("#gsig").style.width = "0%";
+    hush();
+    camSound(true);
+    var fail = function () { closeGhostCam(); var cam = $("#cam"); cam.value = ""; cam.click(); };
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { fail(); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 1280 } }, audio: false }).then(function (st) {
+      if (!gcam) { st.getTracks().forEach(function (t) { t.stop(); }); return; }
+      gStream = st; gvid.srcObject = st; var pr = gvid.play(); if (pr && pr.catch) pr.catch(function () {});
+      speak("Duchokamera. Otáčej se pomalu dokola. Kde šumí nejmíň, tam je.", true);
+      gcam.raf = requestAnimationFrame(gcamFrame);
+    }).catch(fail);
+  }
+  function closeGhostCam() {
+    if (gcam && gcam.raf) cancelAnimationFrame(gcam.raf);
+    gcam = null; gcamEl.hidden = true; camSound(false);
+    if (gStream) { gStream.getTracks().forEach(function (t) { t.stop(); }); gStream = null; }
+    try { gvid.srcObject = null; } catch (e) {}
+  }
+  /* směr kamery: kompas; když chybí (nebo při zkoušce doma), posouvá se tažením prstu */
+  function camHeading() {
+    var hd = test ? { h: null } : curHeading();
+    return hd.h === null ? gcam.vh : hd.h;
+  }
+  gfx.addEventListener("pointerdown", function (e) { if (gcam) gcam.dragX = e.clientX; });
+  gfx.addEventListener("pointermove", function (e) { if (gcam && gcam.dragX !== null) { gcam.vh = (gcam.vh - (e.clientX - gcam.dragX) * 0.25 + 360) % 360; gcam.dragX = e.clientX; } });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { gfx.addEventListener(ev, function () { if (gcam) gcam.dragX = null; }); });
+  var HFOV = 62;
+  function gcamFrame(now) {
+    if (!gcam) return;
+    gcam.raf = requestAnimationFrame(gcamFrame);
+    var dt = Math.min(100, now - gcam.t); gcam.t = now;
+    var dpr = Math.min(1.5, window.devicePixelRatio || 1), W = Math.round(gfx.clientWidth * dpr), H = Math.round(gfx.clientHeight * dpr);
+    if (!W || !H) return;
+    if (gfx.width !== W || gfx.height !== H) { gfx.width = W; gfx.height = H; }
+    var delta = wrap180(gcam.bear - camHeading()), ad = Math.abs(delta), align = clamp(1 - ad / 38, 0, 1);
+    /* držet zamířeno: postupně se zjevuje */
+    if (align > 0.78) gcam.lock = Math.min(2200, gcam.lock + dt); else gcam.lock = Math.max(0, gcam.lock - dt * 0.6);
+    var want = align <= 0 ? 0 : Math.pow(align, 1.3) * Math.min(1, 0.25 + gcam.lock / 1600);
+    gcam.amt += (want - gcam.amt) * Math.min(1, dt / 220);
+    /* poprvé zahlédnut: možná uhne */
+    if (!gcam.seen && gcam.amt > 0.45) {
+      gcam.seen = true;
+      if (Math.random() < 0.55) setTimeout(function () {
+        if (!gcam || gcam.slipped) return;
+        gcam.slipped = true; gcam.lock = 0; gcam.bear = (gcam.bear + (Math.random() < 0.5 ? -1 : 1) * rnd(80, 150) + 360) % 360;
+        whisper(0.22, 1.4, delta > 0 ? 0.8 : -0.8); vibe([60, 40, 60]); speak("Uhnul! Hledej dál.", true);
+      }, rnd(700, 1400));
+    }
+    var ready = gcam.amt > 0.62;
+    if (ready && !gcam.ready) { gcam.ready = true; gcamEl.classList.add("ready"); bell(196, 0.16, 3); vibe([40, 60, 40]); speak("Teď! Vyfoť ho!", true); }
+    else if (!ready && gcam.ready && gcam.amt < 0.45) { gcam.ready = false; gcamEl.classList.remove("ready"); }
+    /* kreslení: šum, duch (s poruchou obrazu), pruhy */
+    gc2.clearRect(0, 0, W, H);
+    var nf = noiseFrames[(Math.random() * noiseFrames.length) | 0];
+    gc2.globalAlpha = 0.06 + 0.42 * Math.pow(1 - align, 1.4); gc2.globalCompositeOperation = "screen";
+    gc2.drawImage(nf, -Math.random() * 40, -Math.random() * 40, W + 40, H + 40);
+    gc2.globalAlpha = 1; gc2.globalCompositeOperation = "source-over";
+    if (gcam.amt > 0.01) drawGhostInto(gc2, W, H, delta, gcam.amt * (0.75 + Math.random() * 0.25), gcam.look, align < 0.85);
+    if (Math.random() < 0.08 + 0.25 * (1 - align)) { gc2.fillStyle = "rgba(200,230,215," + (0.05 + Math.random() * 0.12).toFixed(2) + ")"; gc2.fillRect(0, Math.random() * H, W, 2 + Math.random() * H * 0.04); }
+    $("#gl").classList.toggle("on", delta < -22); $("#gr").classList.toggle("on", delta > 22);
+    $("#gsig").style.width = (align * 100).toFixed(0) + "%";
+    camSoundSet(align, gcam.amt);
+  }
+  /* duch do obrazu: vodorovně podle odchylky od jeho směru; při poruše se rozpadá na pruhy */
+  function drawGhostInto(c, W, H, delta, a, look, glitch) {
+    var sp = sprite(look), h = H * (look === "prosteradlo" ? 0.42 : look === "orby" ? 0.5 : 0.62), w = h * sp.width / sp.height;
+    var x = W / 2 + (delta / HFOV) * W - w / 2, y = H * 0.94 - h + Math.sin(performance.now() / 700) * H * 0.01;
+    c.save(); c.globalAlpha = clamp(a, 0, 1); c.globalCompositeOperation = look === "stin" ? "source-over" : "screen";
+    if (glitch) {
+      var strips = 7;
+      for (var s = 0; s < strips; s++) {
+        var sy = sp.height * s / strips, sh = sp.height / strips, off = (Math.random() - 0.5) * w * 0.18;
+        c.drawImage(sp, 0, sy, sp.width, sh, x + off, y + h * s / strips, w, h / strips + 1);
+      }
+    } else c.drawImage(sp, x, y, w, h);
+    c.restore();
+  }
+  /* vyfotit: video + noční tón + duch + razítko */
+  function composePhoto(src, sw, sh, delta, amt, look, label) {
+    var sc = Math.min(1, 1600 / Math.max(sw, sh)), W = Math.max(1, Math.round(sw * sc)), H = Math.max(1, Math.round(sh * sc));
+    var cv = document.createElement("canvas"); cv.width = W; cv.height = H; var c = cv.getContext("2d");
+    c.drawImage(src, 0, 0, W, H);
+    var im = c.getImageData(0, 0, W, H), d = im.data;
+    for (var i = 0; i < d.length; i += 4) {
+      var p = i >> 2, px = p % W, py = (p / W) | 0, R = d[i], G = d[i + 1], B = d[i + 2], L = 0.3 * R + 0.59 * G + 0.11 * B;
+      R = (R * 0.45 + L * 0.55) * 0.72; G = (G * 0.45 + L * 0.55) * 0.84; B = (B * 0.45 + L * 0.55) * 0.88 + 6;
+      var vx = px / W - 0.5, vy = py / H - 0.5, v = 1 - (vx * vx + vy * vy) * 1.2, nz = (Math.random() - 0.5) * 22;
+      d[i] = clamp(R * v + nz, 0, 255); d[i + 1] = clamp(G * v + nz, 0, 255); d[i + 2] = clamp(B * v + nz, 0, 255);
+    }
+    c.putImageData(im, 0, 0);
+    if (amt > 0.05) drawGhostInto(c, W, H, delta, Math.min(0.95, amt * 1.1), look, false);
+    var now = new Date(), stamp = now.getDate() + ". " + (now.getMonth() + 1) + ". " + now.getFullYear() + "  " + now.getHours() + ":" + String(now.getMinutes()).padStart(2, "0") + "  ·  Detektor typ II";
+    c.textAlign = "left"; c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = W * 0.01;
+    c.font = "italic 500 " + Math.round(W * 0.05) + "px 'EB Garamond', Georgia, serif"; c.fillStyle = "rgba(232,238,234,.92)"; c.fillText(label, W * 0.045, H - W * 0.08);
+    c.font = Math.round(W * 0.022) + "px 'IBM Plex Mono', Menlo, monospace"; c.fillStyle = "rgba(185,214,200,.75)"; c.fillText(stamp, W * 0.045, H - W * 0.037);
+    return cv;
+  }
+  function finishPhoto(cv, i, label) {
+    cv.toBlob(function (blob) {
+      if (!blob) return;
+      var out = URL.createObjectURL(blob);
+      lastPhoto = { blob: blob, url: out, name: label }; photos[i] = lastPhoto;
+      $("#photoimg").src = out; $("#photo").hidden = false; stageEl.hidden = true; $("#sharephoto").hidden = false;
+      $("#snap").hidden = true;
+    }, "image/jpeg", 0.88);
+  }
+  $("#gshot").addEventListener("click", function () {
+    if (!gcam) return;
+    var g = gcam, delta = wrap180(g.bear - camHeading());
+    shutter();
+    gcamEl.classList.remove("flash"); void gcamEl.offsetWidth; gcamEl.classList.add("flash");
+    if (g.amt < 0.5) {
+      /* nic není vidět: zkusit znovu, duch je jinde */
+      speak(g.amt > 0.15 ? "Skoro! Ještě chvíli na něj miř." : "Nic tam není. Otáčej se a hledej, kde šumí nejmíň.", true);
+      return;
+    }
+    var label = LOOK_NAME[g.look], vw = gvid.videoWidth || 1280, vh = gvid.videoHeight || 960;
+    var cv = composePhoto(gvid, vw, vh, delta, g.amt, g.look, label), i = g.i;
+    closeGhostCam();
+    finishPhoto(cv, i, label);
+    whisper(0.14, 2); bell(220, 0.1, 3);
+    speak("Máš ho! Je to " + label + ".", true);
+  });
+  $("#gclose").addEventListener("click", function () { closeGhostCam(); });
+  /* náhradní cesta bez živé kamery: běžná fotka, duch se objeví uprostřed */
+  function photoFromFile(img, i) {
+    var look = lookOf(i), label = LOOK_NAME[look];
+    var cv = composePhoto(img, img.naturalWidth || img.width, img.naturalHeight || img.height, rnd(-12, 12), 0.85, look, label);
+    finishPhoto(cv, i, label); whisper(0.14, 2); bell(220, 0.1, 3); speak("Podívej se na fotku. Je to " + label + ".", true);
+  }
+  /* zvuky kamery: šum (čím víc mimo, tím víc), bzučení a tep, když míří správně */
+  var camS = null;
+  function camSound(on) {
+    if (on && !camS && soundOn && audio()) {
+      var n = ctx.currentTime, src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), ng = ctx.createGain();
+      src.buffer = noiseBuf; src.loop = true; bp.type = "bandpass"; bp.frequency.value = 2200; bp.Q.value = 0.7; ng.gain.value = 0.0001;
+      src.connect(bp); bp.connect(ng); ng.connect(master);
+      var o = ctx.createOscillator(), o2 = ctx.createOscillator(), hg = ctx.createGain(), lp = ctx.createBiquadFilter(), trem = ctx.createOscillator(), tg = ctx.createGain();
+      o.type = "sawtooth"; o2.type = "sine"; o.frequency.value = 110; o2.frequency.value = 165.5; lp.type = "lowpass"; lp.frequency.value = 500; hg.gain.value = 0.0001;
+      trem.frequency.value = 6; tg.gain.value = 0.5; trem.connect(tg); tg.connect(hg.gain);
+      o.connect(lp); o2.connect(lp); lp.connect(hg); route(hg, 0.5);
+      [src, o, o2, trem].forEach(function (x) { x.start(n); });
+      camS = { ng: ng, hg: hg, lp: lp, o: o, o2: o2, nodes: [src, o, o2, trem], beatAt: 0 };
+    } else if (!on && camS) {
+      var t = ctx.currentTime, s = camS; camS = null;
+      [s.ng, s.hg].forEach(function (g) { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0.0001, t, 0.08); });
+      s.nodes.forEach(function (x) { try { x.stop(t + 0.5); } catch (e) {} });
+    }
+  }
+  function camSoundSet(align, amt) {
+    if (!camS) return;
+    var t = ctx.currentTime;
+    camS.ng.gain.setTargetAtTime(0.02 + 0.16 * Math.pow(1 - align, 1.3), t, 0.08);
+    camS.hg.gain.setTargetAtTime(0.0001 + 0.12 * align * align, t, 0.1);
+    camS.o.frequency.setTargetAtTime(90 + 80 * align, t, 0.2); camS.o2.frequency.setTargetAtTime(135 + 140 * amt, t, 0.2);
+    camS.lp.frequency.setTargetAtTime(300 + 1500 * amt, t, 0.15);
+    var now = performance.now();
+    if (align > 0.55 && now - camS.beatAt > 1300 - 700 * amt) { camS.beatAt = now; thump(0.25 + 0.3 * amt); }
+  }
+  function shutter() {
+    if (!soundOn || !audio()) return;
+    var n = ctx.currentTime;
+    [0, 0.07].forEach(function (dt2) {
+      var src = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = noiseBuf; hp.type = "highpass"; hp.frequency.value = 1800;
+      g.gain.setValueAtTime(0.35, n + dt2); g.gain.exponentialRampToValueAtTime(0.0001, n + dt2 + 0.05);
+      src.connect(hp); hp.connect(g); g.connect(master); src.start(n + dt2, Math.random(), 0.06);
+    });
+  }
+
+  /* ---------- Napětí při přibližování ----------
+     Pod pípáním a šumem roste hluboký dron a dech, blízko se ozývá klepání, u ducha zazní mrazivý akord. */
+  var tens = null;
+  function tensionSet(k, here) {
+    if (!soundOn || !audio()) { if (tens) tensionStop(); return; }
+    if (!tens) {
+      var n = ctx.currentTime, out = ctx.createGain(); out.gain.value = 0.0001; out.connect(master);
+      var lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 200; lp.Q.value = 4; lp.connect(out);
+      var os = [41.2, 41.6, 61.7].map(function (f) { var o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = f; o.connect(lp); o.start(n); return o; });
+      var br = ctx.createBufferSource(), bb = ctx.createBiquadFilter(), bg = ctx.createGain(), blfo = ctx.createOscillator(), blg = ctx.createGain();
+      br.buffer = noiseBuf; br.loop = true; bb.type = "bandpass"; bb.frequency.value = 700; bb.Q.value = 2; bg.gain.value = 0.0001;
+      blfo.frequency.value = 0.25; blg.gain.value = 0.5; blfo.connect(blg); blg.connect(bg.gain);
+      br.connect(bb); bb.connect(bg); route(bg, 0.6); br.start(n); blfo.start(n);
+      var ch = ctx.createGain(); ch.gain.value = 0.0001; route(ch, 0.9);
+      var cos = [392, 466.2, 587.3, 698.5].map(function (f) { var o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f; o.detune.value = rnd(-12, 12); o.connect(ch); o.start(n); return o; });
+      tens = { out: out, lp: lp, os: os, bg: bg, ch: ch, nodes: os.concat([br, blfo]).concat(cos), knockAt: 0 };
+    }
+    var t = ctx.currentTime;
+    tens.out.gain.setTargetAtTime(0.0001 + 0.11 * Math.pow(k, 1.6), t, 0.4);
+    tens.lp.frequency.setTargetAtTime(160 + 1100 * k * k, t, 0.4);
+    tens.os.forEach(function (o, j) { o.frequency.setTargetAtTime([41.2, 41.6, 61.7][j] * (1 + 0.5 * k), t, 0.8); });
+    tens.bg.gain.setTargetAtTime(0.0001 + 0.06 * k * k, t, 0.5);
+    tens.ch.gain.setTargetAtTime(here ? 0.035 : 0.0001, t, here ? 0.8 : 0.3);
+    var now = performance.now();
+    if (k > 0.55 && !here && now > tens.knockAt) { tens.knockAt = now + rnd(2600, 6000) * (1.6 - k); if (Math.random() < 0.6) knock(0.25 + 0.35 * k); }
+  }
+  function tensionStop() {
+    if (!tens || !ctx) return;
+    var t = ctx.currentTime, s = tens; tens = null;
+    [s.out, s.bg, s.ch].forEach(function (g) { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0.0001, t, 0.4); });
+    s.nodes.forEach(function (x) { try { x.stop(t + 2); } catch (e) {} });
+  }
+  /* klepání: dvakrát až třikrát tupě, jako na dřevo, odněkud z dálky */
+  function knock(vol) {
+    if (!soundOn || !audio()) return;
+    var n = ctx.currentTime, cnt = Math.random() < 0.5 ? 2 : 3, pan = rnd(-0.8, 0.8);
+    for (var j = 0; j < cnt; j++) {
+      var t = n + j * rnd(0.22, 0.3), src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = noiseBuf; bp.type = "bandpass"; bp.frequency.value = 190; bp.Q.value = 3;
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      src.connect(bp); bp.connect(g); route(g, 0.7, pan); src.start(t, Math.random(), 0.14);
+    }
+  }
+  function tensionLoop() {
+    var b = state === "play" ? nearest() : null;
+    if (b) tensionSet(clamp(level / 10, 0, 1), b.d <= catchR());
+    else if (tens) tensionStop();
+    setTimeout(tensionLoop, 250);
+  }
 
   /* odložené zvuky a hlášky jedné obrazovky; při odchodu z ní se zruší */
   var later = [];
@@ -2117,14 +2430,14 @@
   }
   function toIntro() {
     bootGen++;
-    cancelLater(); stopWatch(); hush(); wake(false); ambience(false); state = "intro"; test = false; $("#testbar").hidden = true;
+    cancelLater(); closeGhostCam(); tensionStop(); stopWatch(); hush(); wake(false); ambience(false); state = "intro"; test = false; $("#testbar").hidden = true;
     revealEl.hidden = true; target = null; closeRitual(false); $("#scare").hidden = true; pendingSpawn = -1; spawnGen++;
     intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; $("#carbtn").disabled = false; radar.classList.remove("boot"); radar.classList.add("off");
     saved = loadSave(); resumeBtn.hidden = !saved; msg.textContent = "";
     ghosts = []; buildDots(); drawCandles(); timeEl.textContent = "0:00"; catchBtn.disabled = true; sayEl.textContent = "";
   }
   function finish() {
-    cancelLater(); state = "done"; finishedAt = Date.now(); clearSave(); stopWatch(); wake(false); ambience(false); radar.classList.add("off");
+    cancelLater(); closeGhostCam(); state = "done"; finishedAt = Date.now(); clearSave(); stopWatch(); wake(false); ambience(false); radar.classList.add("off");
     catchBtn.disabled = true;
     var time = mmss((finishedAt - startedAt) / 1000);
     revealEl.hidden = false; restartAnims(revealEl);
@@ -2455,7 +2768,7 @@
       var hd = curHeading(), pan = hd.h === null ? 0 : Math.sin(rad(bearing(pos, b.g) - hd.h)) * 0.9;
       ghostVoice(b.g, 0.05 + 0.24 * k, 0.85 - 0.5 * k, pan, false);
       if (Math.random() < 0.25 + 0.3 * k && b.g.t !== "schovavac") setTimeout(function () { whisper(0.03 + 0.07 * k, 1.6, pan); }, 2600);
-      nextCall = now + 7000 - 5000 * k + rnd(-600, 600);
+      nextCall = now + 6500 - 5200 * k + rnd(-600, 600);
     }
     setTimeout(callLoop, 250);
   }
@@ -2739,7 +3052,7 @@
     }).catch(function () {});
   } catch (e) {}
 
-  frame(); callLoop(); heartLoop(); clickLoop(); vibeLoop(); beepLoop(); staticLoop();
+  frame(); callLoop(); heartLoop(); clickLoop(); vibeLoop(); beepLoop(); staticLoop(); tensionLoop();
 })();
 </script>
 </body>
