@@ -920,9 +920,9 @@
   }
   /* Pěšky: cesty a k tomu všechno, kde strašidlo být nesmí: budovy, voda a řeky, koleje, staveniště, vojenské a jiné uzavřené plochy */
   /* naposledy načtená mapa okolí se pamatuje: na stejném místě hra začne hned a mapa poslouží i jako záloha */
-  var MAP_KEY = "lovci-duchu-mapa";
+  var MAP_KEY = "lovci-duchu-ulice";
   /* Zapamatovaná mapa: ukládá se jen to, co hra potřebuje (iPhone dovolí stránce uložit jen pár MB) */
-  var KEEP = ["highway", "foot", "footway", "access", "indoor", "tunnel", "bridge", "covered", "service", "building", "waterway", "railway",
+  var KEEP = ["highway", "name", "ref", "foot", "footway", "access", "indoor", "tunnel", "bridge", "covered", "service", "building", "waterway", "railway",
     "leisure", "natural", "landuse", "amenity", "barrier", "water", "oneway", "junction"];
   var r6 = function (x) { return Math.round(x * 1e6) / 1e6; };
   function packTags(t) { var o = {}; KEEP.forEach(function (k) { if (t && t[k] != null) o[k] = t[k]; }); return o; }
@@ -970,20 +970,11 @@
   function osmWalkArea(o) {
     var t0 = performance.now(), fresh = cachedMap(o, 14 * 86400000);
     if (fresh) { mapInfo = { src: "z paměti", ms: performance.now() - t0 }; return Promise.resolve(parseWalkArea(o, fresh)); }
-    /* jen malý výřez kolem hráče (asi 220 × 220 m), obdélník je pro server rychlejší než kruh;
-       malé limity (čas, velikost) pustí dotaz na přetíženém serveru dřív na řadu */
+    /* jen ulice a cesty v malém výřezu kolem hráče (asi 220 × 220 m): malý a rychlý dotaz */
     var sw = offset(offset(o, 110, 180), 110, 270), ne = offset(offset(o, 110, 0), 110, 90);
     var bb = sw.lat.toFixed(6) + "," + sw.lon.toFixed(6) + "," + ne.lat.toFixed(6) + "," + ne.lon.toFixed(6);
-    /* domy, areály a cesty celé (ať je jasné, co je uvnitř); jen řeky a vodní toky oříznuté, jsou obrovské */
-    var q = "[out:json][timeout:10][maxsize:16777216][bbox:" + bb + "];(" +
-      "way[highway];way[building];relation[building];way[natural=water];" +
-      "way[landuse~\"^(railway|construction|military|landfill|quarry|brownfield|allotments|farmyard|garages)$\"];" +
-      "relation[landuse~\"^(railway|construction|military|allotments|farmyard|garages)$\"];" +
-      "way[amenity~\"^(school|kindergarten|prison|swimming_pool)$\"];relation[amenity~\"^(school|kindergarten|prison)$\"];" +
-      "way[leisure~\"^(garden|swimming_pool)$\"];" +
-      "way[railway~\"^(rail|light_rail|narrow_gauge|subway|monorail|preserved)$\"];" +
-      "node[barrier~\"^(gate|lift_gate|swing_gate|sliding_gate|turnstile|full-height_turnstile)$\"];" +
-      ");out tags geom;(relation[natural=water];way[waterway];);out tags geom(" + bb + ");";
+    var q = "[out:json][timeout:10][maxsize:8388608][bbox:" + bb + "];" +
+      "way[highway~\"^(residential|living_street|pedestrian|unclassified|tertiary|secondary|footway|path|cycleway|track|steps)$\"];out tags geom;";
     return overpass(q, 15000).then(function (els) {
       var pk = packEls(els), area = parseWalkArea(o, unpackEls(pk)); /* stejná data jako z paměti */
       try { localStorage.setItem(MAP_KEY, JSON.stringify({ lat: o.lat, lon: o.lon, at: Date.now(), pk: pk })); } catch (e) {}
@@ -997,98 +988,9 @@
     });
   }
   function parseWalkArea(o, els) {
-    {
-      var ways = [], polys = [], lines = [], gates = {};
-      els.forEach(function (e) {
-        var t = e.tags || {};
-        if (e.type === "node") { if (t.barrier) gates[nodeKey(e)] = true; return; }
-        if (e.type === "way" && e.geometry && e.geometry.length > 1) {
-          if (t.highway) { ways.push(wayInfo(e)); return; }
-          var pts = geomPts(e.geometry);
-          if (t.waterway) {
-            if (closedRing(pts)) polys.push(pts);
-            lines.push({ pts: pts, buf: t.waterway === "river" ? 14 : t.waterway === "canal" ? 8 : t.waterway === "riverbank" ? 3 : 4 });
-            return;
-          }
-          if (t.railway) { lines.push({ pts: pts, buf: 8 }); return; }
-          /* veřejná zahrada smí, soukromá ne */
-          if (t.leisure === "garden" && /^(yes|public|permissive)$/.test(t.access || "")) return;
-          if (closedRing(pts)) polys.push(pts);
-          lines.push({ pts: pts, buf: t.building ? 3 : 3 }); /* odstup od zdí a plotů */
-        } else if (e.type === "relation" && e.members) {
-          /* složené objekty (dům s dvorem, velký blok, řeka): obrysy se poskládají z kusů */
-          var outer = [];
-          e.members.forEach(function (m) {
-            if (m.type !== "way" || !m.geometry || m.geometry.length < 2) return;
-            var pts = geomPts(m.geometry);
-            lines.push({ pts: pts, buf: 3 });
-            if (m.role !== "inner") outer.push(pts);
-          });
-          assembleRings(outer).forEach(function (r) { polys.push(r); });
-        }
-      });
-      /* odstup 3 m od soukromých, příjezdových a vnitřních cest (vjezdy do dvorů, průchody) */
-      ways.forEach(function (w) { if (!walkable(w)) lines.push({ pts: w.pts, buf: 3 }); });
-      var area = { ways: ways, polys: polys, lines: lines };
-      area.reach = reachable(o, ways, gates);
-      return area;
-    }
-  }
-  /* poskládá uzavřené obrysy z kusů cest (konec jednoho = začátek dalšího) */
-  function assembleRings(parts) {
-    var rings = [], open = [], same = function (a, b) { return a.lat === b.lat && a.lon === b.lon; };
-    parts.forEach(function (p) { if (closedRing(p)) rings.push(p); else open.push(p.slice()); });
-    while (open.length) {
-      var cur = open.shift(), grew = true;
-      while (!same(cur[0], cur[cur.length - 1]) && grew) {
-        grew = false;
-        for (var i = 0; i < open.length; i++) {
-          var q = open[i], end = cur[cur.length - 1];
-          if (same(end, q[0])) cur = cur.concat(q.slice(1));
-          else if (same(end, q[q.length - 1])) cur = cur.concat(q.slice(0, -1).reverse());
-          else continue;
-          open.splice(i, 1); grew = true; break;
-        }
-      }
-      if (cur.length > 3 && same(cur[0], cur[cur.length - 1])) rings.push(cur);
-    }
-    return rings;
-  }
-  /* Kam se dá z místa startu dojít pěšky, aniž by se šlo domem, branou, soukromou nebo příjezdovou cestou.
-     Pěšiny ve dvorech jsou s ulicí spojené jen průchodem nebo bránou, takže do téhle sítě nepatří. */
-  function walkable(w) {
-    if (/^(motorway|trunk|motorway_link|trunk_link|corridor|elevator|construction|proposed|raceway|bus_guideway)$/.test(w.hw)) return false;
-    if (/^(private|no|customers|delivery|agricultural|forestry)$/.test(w.acc || "") && !/^(yes|designated|permissive)$/.test(w.foot || "")) return false;
-    if (w.foot === "no" || (w.indoor && w.indoor !== "no") || (w.tn && w.tn !== "no") || (w.cov && w.cov !== "no")) return false;
-    if (w.hw === "service" && w.svc && w.svc !== "alley") return false;
-    return true;
-  }
-  function reachable(o, ways, gates) {
-    var parent = {}, size = {};
-    function find(k) { while (parent[k] !== k) { parent[k] = parent[parent[k]]; k = parent[k]; } return k; }
-    function add(k) { if (parent[k] === undefined) { parent[k] = k; size[k] = 0; } }
-    function join(a, b) { a = find(a); b = find(b); if (a !== b) { parent[b] = a; size[a] += size[b]; } }
-    ways.forEach(function (w) {
-      if (!walkable(w)) return;
-      for (var k = 1; k < w.pts.length; k++) {
-        var ka = nodeKey(w.pts[k - 1]), kb = nodeKey(w.pts[k]);
-        add(ka); add(kb);
-        size[find(ka)] += dist(w.pts[k - 1], w.pts[k]);
-        if (!gates[ka] && !gates[kb]) join(ka, kb); /* brána přerušuje cestu */
-      }
-    });
-    /* start: největší síť cest, která vede do 60 m od hráče (ne malá síť uvnitř dvora) */
-    var best = null;
-    ways.forEach(function (w) {
-      if (!walkable(w)) return;
-      for (var k = 1; k < w.pts.length; k++) {
-        if (projSeg(o, w.pts[k - 1], w.pts[k]).d > 120) continue; /* doma uvnitř bloku můžeš být od ulice dál */
-        var r = find(nodeKey(w.pts[k - 1])), sz = size[r];
-        if (!best || sz > best.sz) best = { r: r, sz: sz };
-      }
-    });
-    if (!best) return null;
-    return function (w, a, b) { return walkable(w) && find(nodeKey(a)) === best.r && find(nodeKey(b)) === best.r; };
+    var ways = [];
+    els.forEach(function (e) { if (e.type === "way" && e.tags && e.tags.highway && e.geometry && e.geometry.length > 1) ways.push(wayInfo(e)); });
+    return { ways: ways };
   }
   /* Mapa okolí se stahuje jen jednou pro jedno místo: předem na úvodu, od prvního zaměření, a start hry ji převezme. */
   var mapJob = null;
@@ -1100,72 +1002,77 @@
     mapJob = job;
     return job.p;
   }
-  function closedRing(pts) { var a = pts[0], b = pts[pts.length - 1]; return pts.length > 3 && a.lat === b.lat && a.lon === b.lon; }
-  function inPoly(p, poly) {
-    var c = false;
-    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      var a = poly[i], b = poly[j];
-      if ((a.lat > p.lat) !== (b.lat > p.lat) && p.lon < (b.lon - a.lon) * (p.lat - a.lat) / (b.lat - a.lat) + a.lon) c = !c;
-    }
-    return c;
-  }
-  /* je bod uvnitř budovy, ve vodě, na kolejích nebo jinde, kam se nesmí? */
-  function blockedAt(p, area) {
-    if (!area) return false;
-    for (var i = 0; i < area.polys.length; i++) if (inPoly(p, area.polys[i])) return true;
-    for (var k = 0; k < area.lines.length; k++) { var L = area.lines[k], s = snapToWays(p, [L]); if (s && s.d < L.buf) return true; }
-    return false;
-  }
-  /* chodníky a pěšiny mají přednost, klidné ulice jsou záloha; velké silnice nikdy */
-  /* stahujeme i velké silnice, ale jen proto, abychom se jim vyhnuli */
   var FOOT_RE = "^(footway|path|pedestrian|living_street|track|cycleway|bridleway|residential|service|unclassified|tertiary|secondary|primary|trunk|motorway|tertiary_link|secondary_link|primary_link|trunk_link|motorway_link)$";
   var DANGER = /^(tertiary|secondary|primary|trunk|motorway)(_link)?$/;
   var ROAD_RE = "^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$";
-  function footPref(w) {
-    if (w.foot === "no" || w.fw === "crossing" || DANGER.test(w.hw)) return 0;
-    /* nepřístupné nebo ne venku: soukromé, uvnitř budov, průchody a podchody, mosty (ne nad řekou) */
-    if (/^(private|no|customers|delivery|agricultural|forestry)$/.test(w.acc || "") && !/^(yes|designated|permissive)$/.test(w.foot || "")) return 0;
-    if (w.hw === "corridor" || w.hw === "elevator" || (w.indoor && w.indoor !== "no")) return 0;
-    if ((w.tn && w.tn !== "no") || (w.cov && w.cov !== "no") || (w.br && w.br !== "no")) return 0;
-    if (/^(footway|path|pedestrian|living_street|track|cycleway|bridleway)$/.test(w.hw)) return 1;
-    if (/^(residential|unclassified)$/.test(w.hw) || (w.hw === "service" && w.svc === "alley")) return 2; /* příjezdy do dvorů a garáží ne */
+  /* Duchové jen na ulice: pojmenované ulice a cesty (dvory, příjezdy a pěšiny ve dvorech jméno nemají).
+     Záložně (stupeň 2) i nepojmenované parkové cesty a chodníky. Nikdy tunely, mosty, soukromé a vnitřní cesty. */
+  function publicWay(w) {
+    if (/^(private|no|customers|delivery|agricultural|forestry)$/.test(w.acc || "") && !/^(yes|designated|permissive)$/.test(w.foot || "")) return false;
+    if (w.foot === "no" || w.fw === "crossing") return false;
+    if ((w.tn && w.tn !== "no") || (w.cov && w.cov !== "no") || (w.br && w.br !== "no") || (w.indoor && w.indoor !== "no")) return false;
+    return true;
+  }
+  function streetPref(w, lvl) {
+    if (!publicWay(w) || w.hw === "steps") return 0;
+    if (w.nm && /^(residential|living_street|pedestrian|unclassified|tertiary|secondary|footway|path|cycleway)$/.test(w.hw)) return 1;
+    if (lvl >= 2 && /^(footway|path|pedestrian|cycleway|track)$/.test(w.hw)) return 2;
     return 0;
   }
-  /* body každé 3 m podél cest, jen v daném rozmezí vzdálenosti od startu */
-  function samplePaths(o, ways, rMin, rMax, area) {
-    var out = [], danger = ways.filter(function (w) { return DANGER.test(w.hw); });
-    if (area && !area.reach) return out; /* hráč není u žádné veřejné cesty: raději nic */
+  var LV = [
+    { lvl: 1, r0: 15, r1: 50, sep: 15 },
+    { lvl: 1, r0: 10, r1: 85, sep: 12 },
+    { lvl: 2, r0: 10, r1: 85, sep: 10 }
+  ];
+  var placeDiag = null, placeOpt = LV[0];
+  function samplePaths(o, ways, rMin, rMax, area, opt, st) {
+    opt = opt || placeOpt; st = st || {};
+    var out = [];
     ways.forEach(function (w) {
-      var pref = footPref(w); if (!pref) return;
+      var pref = streetPref(w, opt.lvl); if (!pref) return;
+      st.streets = (st.streets || 0) + 1;
       for (var k = 1; k < w.pts.length; k++) {
         var a = w.pts[k - 1], b = w.pts[k], L = dist(a, b), steps = Math.max(1, Math.floor(L / 3));
-        if (area && !area.reach(w, a, b)) continue; /* sem se z ulice nedojde (dvůr za průchodem nebo bránou) */
         for (var s = 0; s <= steps; s++) {
           var t = s / steps, p = { lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t }, d = dist(o, p);
-          if (d >= rMin && d <= rMax && !(danger.length && (snapToWays(p, danger) || { d: 99 }).d < 8) && !blockedAt(p, area)) out.push({ lat: p.lat, lon: p.lon, d: d, b: bearing(o, p), pref: pref });
+          if (d >= rMin && d <= rMax) out.push({ lat: p.lat, lon: p.lon, d: d, b: bearing(o, p), pref: pref });
         }
       }
     });
+    st.ok = out.length;
     return out;
   }
-  /* rozmístí n strašidel na cesty: každé v jiném směru, co nejvíc od sebe */
-  function placeOnPaths(o, ways, n, area) {
-    var pts = samplePaths(o, ways, 15, 50, area);
-    if (pts.length < n * 3) pts = samplePaths(o, ways, 10, 70, area); /* málo míst: zkusit kousek dál */
-    if (pts.length < n) return null;
-    var base = rnd(0, 360), chosen = [];
-    for (var i = 0; i < n; i++) {
-      var lo = (base + i * 360 / n) % 360, inSector = function (p) { var x = ((p.b - lo) % 360 + 360) % 360; return x < 360 / n; };
-      var far = function (p) { return chosen.every(function (c) { return dist(c, p) > 18; }); };
-      var pick = function (list) { return list.length ? list[Math.floor(Math.random() * list.length)] : null; };
-      var c = pick(pts.filter(function (p) { return p.pref === 1 && inSector(p) && far(p); })) ||
-              pick(pts.filter(function (p) { return inSector(p) && far(p); })) ||
-              pick(pts.filter(function (p) { return p.pref === 1 && far(p); })) ||
-              pick(pts.filter(far));
-      if (!c) return null;
-      chosen.push(c);
+  /* vybere n míst: každé v jiném směru, co nejvíc od sebe (aspoň sep metrů) */
+  function pickSpread(o, pts, n, sep) {
+    for (var attempt = 0; attempt < 4; attempt++) {
+      var base = rnd(0, 360), chosen = [], okAll = true;
+      for (var i = 0; i < n; i++) {
+        var lo = (base + i * 360 / n) % 360, inSector = function (p) { var x = ((p.b - lo) % 360 + 360) % 360; return x < 360 / n; };
+        var far = function (p) { return chosen.every(function (c) { return dist(c, p) > sep; }); };
+        var pick = function (list) { return list.length ? list[Math.floor(Math.random() * list.length)] : null; };
+        var c = pick(pts.filter(function (p) { return p.pref === 1 && inSector(p) && far(p); })) ||
+                pick(pts.filter(function (p) { return inSector(p) && far(p); })) ||
+                pick(pts.filter(function (p) { return p.pref === 1 && far(p); })) ||
+                pick(pts.filter(far));
+        if (!c) { okAll = false; break; }
+        chosen.push(c);
+      }
+      if (okAll) return chosen;
     }
-    return chosen;
+    return null;
+  }
+  function placeOnPaths(o, ways, n, area) {
+    for (var lv = 0; lv < LV.length; lv++) {
+      var opt = LV[lv], st = {}, pts = samplePaths(o, ways, opt.r0, opt.r1, area, opt, st);
+      placeDiag = { lv: lv + 1, st: st, ways: ways.length };
+      var ch = pts.length >= n ? pickSpread(o, pts, n, opt.sep) : null;
+      if (ch) { placeOpt = opt; return ch; }
+    }
+    return null;
+  }
+  function diagText() {
+    if (!placeDiag) return "";
+    return "cest v mapě " + placeDiag.ways + ", vhodných " + (placeDiag.st.streets || 0) + ", míst v okruhu " + (placeDiag.st.ok || 0);
   }
   /* nejbližší bod na silnici k danému bodu (pro režim z auta) */
   function snapToWays(p, ways) {
@@ -1423,8 +1330,9 @@
           if (!area) { failWhy = "map"; return null; }
           failWhy = "paths";
           try {
-            pathPts = samplePaths(o, area.ways, 12, 55, area);
-            return placeOnPaths(o, area.ways, N, area);
+            var placed = placeOnPaths(o, area.ways, N, area);
+            pathPts = samplePaths(o, area.ways, 12, 55, area, placeOpt);
+            return placed;
           } catch (err) { failWhy = "map"; mapInfo = { src: "chyba: " + String(err && err.message || err).slice(0, 60), ms: 0 }; return null; }
         }).catch(function () { return null; }) /* kalibrace se nikdy nesmí zaseknout */
       : Promise.resolve(null);
@@ -1443,7 +1351,7 @@
       if (mapFail) {
         clearSave(); toIntro();
         var m = failWhy === "paths"
-          ? "Kolem tebe nevidím chodníky ani cesty, kam se dá bezpečně dojít. Vyjdi na ulici nebo do parku a zkus to znovu."
+          ? "Kolem tebe nevidím chodníky ani cesty, kam se dá bezpečně dojít. Vyjdi na ulici nebo do parku a zkus to znovu. (" + diagText() + ")"
           : "Nepodařilo se načíst mapu okolí. Bez ní nevím, kde je bezpečně venku, tak duchy neschovám. Zkus to za chvilku znovu.";
         if (mapInfo && mapInfo.src.indexOf("chyba") === 0) m += " (" + mapInfo.src + ")";
         msg.textContent = m; speak(m, true); return;
@@ -2302,7 +2210,8 @@
     } else if (state === "pick") {
       valueEl.innerHTML = "--<small>m</small>"; stateEl.textContent = "Vyber ducha."; stateEl.className = "state"; catchBtn.disabled = true;
       hintEl.textContent = (pos ? "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") : "") +
-        (mapInfo && mode === "walk" ? " · mapa " + mapInfo.src + " " + (mapInfo.ms / 1000).toFixed(1).replace(".", ",") + " s" : "");
+        (mapInfo && mode === "walk" ? " · mapa " + mapInfo.src + " " + (mapInfo.ms / 1000).toFixed(1).replace(".", ",") + " s" : "") +
+        (placeDiag && mode === "walk" ? " · přísnost " + placeDiag.lv : "");
     } else if (state === "boot") {
       hintEl.textContent = "kalibrace " + Math.floor((performance.now() - bootAt) / 1000) + " s" + (mode === "walk" ? (mapInfo ? " · mapa " + mapInfo.src : " · čekám na mapu okolí") : "");
     } else if (state === "intro") {
