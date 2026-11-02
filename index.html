@@ -14,7 +14,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&family=Barlow+Condensed:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&family=Barlow+Condensed:wght@500;600&display=swap">
 <style>
   /* Atmosféra: tma, mlha, zrno, tlumené barvy kosti a fosforu. Žádné emoji, žádné křiklavé barvy.
      Vzhled: telefon je skutečný přístroj. Tmavé pouzdro se šrouby a vyrytými popisky, kulatá obrazovka
@@ -39,7 +39,7 @@
     --blood: #a8443a;
     --blood-rgb: 168, 68, 58;
     --phosphor: #0b120e;
-    --serif: "EB Garamond", "Iowan Old Style", Georgia, serif;
+    --serif: "Barlow", "Helvetica Neue", Arial, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
     --label: "Barlow Condensed", "IBM Plex Mono", "Arial Narrow", sans-serif;
     --key-shadow: inset 0 1px 0 rgba(216, 214, 203, .09), inset 0 -2px 0 rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(0, 0, 0, .5), 0 2px 3px rgba(0, 0, 0, .6);
@@ -344,6 +344,16 @@
   .reveal #stage, .reveal .photo { flex: 0 1 auto; min-height: 0; }
   .reveal .photo { display: flex; justify-content: center; }
   .reveal .photo img { width: auto !important; max-width: min(86vw, 420px); max-height: 100% !important; height: auto; }
+  /* HUD panel se svíčkami nahoře na obrazovce nálezu, ve stylu přístroje */
+  .modes:has(> .btn:only-child) { grid-template-columns: 1fr; }
+  .rhud { width: min(100%, 420px); display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 10px;
+    background: linear-gradient(180deg, #1b211d, #0c100e); border: 1px solid rgba(190, 205, 195, .18); box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 6px 18px rgba(0,0,0,.6); }
+  .rhud .rhl { display: flex; align-items: center; gap: 7px; font: 600 11px/1.1 var(--label); letter-spacing: .24em; text-transform: uppercase; color: var(--ember); flex: 1; text-align: left; }
+  .rhud .rled { width: 8px; height: 8px; border-radius: 50%; background: #c0524a; box-shadow: 0 0 8px #c0524a; animation: blinkt 1s steps(2) infinite; flex: none; }
+  .rhud .score { gap: 10px; }
+  .rhud .score .candle { width: 13px; height: 30px; }
+  .rhud .rhc { font: 500 15px/1 var(--mono); color: var(--ghost); padding: 5px 7px; border-radius: 4px; background: #060908; border: 1px solid rgba(190,205,195,.14); font-variant-numeric: tabular-nums; }
+  .reveal h2 { font-family: var(--label) !important; font-style: normal !important; font-weight: 600 !important; text-transform: uppercase; letter-spacing: .12em; }
   .reveal .rsteps { font-size: clamp(13px, 2.2vh, 16px); line-height: 1.4; }
   .eyes { max-height: 18vh; }
   .eyes { width: min(72vw, 340px); height: auto; opacity: 0; animation: eyesIn 4.5s ease-out .5s forwards; }
@@ -592,12 +602,11 @@
     <h1>Lovci duchů</h1>
     <p class="msg" id="msg" aria-live="polite"></p>
     <p class="sub">Venku, za šera, poslouchej.</p>
-    <p class="lead">Hledej strašidla s detektorem. Vyber, jestli jdeš pěšky, nebo jedeš autem.</p>
+    <p class="lead">Hledej strašidla s detektorem. Ťukni na chodce a jdi ven hledat.</p>
     <div class="note" id="ioshint" hidden><b>Přes celou obrazovku</b><span>Na iPhonu ťukni na Sdílet a pak Přidat na plochu. Detektor se pak otevře jako aplikace bez lišt prohlížeče.</span></div>
     <div class="btns">
       <div class="modes">
         <button class="btn primary" id="begin" type="button" aria-label="Hledat pěšky" title="Hledat pěšky"><span class="ms" aria-hidden="true">directions_walk</span><span class="lbl" aria-hidden="true">Pěšky</span></button>
-        <button class="btn primary" id="carbtn" type="button" aria-label="Hledat z auta" title="Hledat z auta"><span class="ms" aria-hidden="true">directions_car</span><span class="lbl" aria-hidden="true">Z auta</span></button>
       </div>
       <div class="btnrow secondary">
         <button class="btn" id="resume" type="button" hidden aria-label="Pokračovat v rozehrané hře" title="Pokračovat v rozehrané hře"><span class="ms" aria-hidden="true">resume</span><span class="lbl" aria-hidden="true">Pokračovat</span></button>
@@ -614,6 +623,7 @@
 
 <section class="overlay reveal" id="reveal" hidden>
   <div class="overlay-in">
+    <div class="rhud" aria-hidden="true"><span class="rhl"><span class="rled"></span>Signál zachycen</span><div class="score" id="score"></div><span class="rhc lcd" id="rcount">1/3</span></div>
     <div id="stage"></div>
     <h2 id="rname"></h2>
     <p class="quote" id="rquote"></p>
@@ -624,7 +634,6 @@
       <button class="btn" id="sharephoto" type="button" hidden aria-label="Uložit nebo poslat fotku" title="Uložit nebo poslat"><span class="ms" aria-hidden="true">ios_share</span><span class="lbl" aria-hidden="true">Uložit do Fotek</span></button>
     </div>
     <input type="file" id="cam" accept="image/*" capture="environment" hidden>
-    <div class="score" id="score" aria-hidden="true"></div>
     <button class="btn primary" id="rnext" type="button" aria-label="Dál" title="Dál"></button>
   </div>
 </section>
@@ -653,7 +662,7 @@
   <div class="overlay-in">
     <p class="kicker">Jak se hraje</p>
     <p class="rtext">Detektor kolem tebe zachytí strašidla. Na radaru se objeví duchové. Ťukni na jednoho a jdi za ním. Až budeš blízko, uslyšíš ho. Strašidla se schovávají u chodníků a cest. Každé je jiné: plaché uteče, když běžíš, spáč se probudí, když s detektorem třeseš, zvědavec se připlíží, když stojíš, a schovávač umí vyděsit. Než ho chytíš, musíš ho zakreslit do kruhu nebo na něj nahlas říct zaklínadlo.</p>
-    <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. <span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_car</span> Z auta: pět strašidel se postupně objevuje na silnici, po které jedete, asi kilometr před autem. Hraje jen spolujezdec, nikdy řidič. Je potřeba zapnutá poloha (GPS).</span></div>
+    <div class="note"><b>Pro dospělé</b><span><span class="ms" aria-hidden="true" style="font-size:16px;vertical-align:-3px">directions_walk</span> Pěšky: tři strašidla do 50 metrů. Hrajte na bezpečném místě, daleko od silnice. Je potřeba zapnutá poloha (GPS).</span></div>
     <button class="btn" id="rulesclose" type="button" aria-label="Zpět" title="Zpět"><span class="ms" aria-hidden="true">arrow_back</span><span class="lbl" aria-hidden="true">Zpět</span></button>
   </div>
 </section>
@@ -1519,6 +1528,7 @@
     try {
       var s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
       var n = MODES[s && s.mode] ? MODES[s.mode].n : 3;
+      if (s && s.mode === "car") return null; /* režim z auta je zrušený */
       if (s && s.origin && s.ghosts && s.ghosts.length === n && Date.now() - s.startedAt < 3 * 3600 * 1000 && s.ghosts.some(function (g) { return !g.caught; })) return s;
     } catch (e) {}
     return null;
@@ -1610,7 +1620,7 @@
   }
   function onPosErr(e) {
     if (state === "locating") {
-      state = "intro"; beginBtn.disabled = false; resumeBtn.disabled = false; $("#carbtn").disabled = false; stopWatch();
+      state = "intro"; beginBtn.disabled = false; resumeBtn.disabled = false; stopWatch();
       msg.textContent = e && e.code === 1
         ? "Poloha je zakázaná. Povol ji v nastavení prohlížeče pro tuhle stránku."
         : "Polohu se nepodařilo zjistit. Vyjdi ven pod širé nebe a zkus to znovu.";
@@ -2099,11 +2109,14 @@
     return '<svg class="eyes" viewBox="0 0 200 100" aria-hidden="true"><defs><filter id="eg" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>' +
       '<g filter="url(#eg)" style="filter:drop-shadow(0 0 14px ' + glow + ')">' + eye(62) + eye(138) + '</g></svg>';
   }
-  function drawScore() { scoreEl.innerHTML = ghosts.map(function (g) { return candleSVG(g.caught); }).join(""); }
+  function drawScore() {
+    scoreEl.innerHTML = ghosts.map(function (g) { return candleSVG(g.caught); }).join("");
+    $("#rcount").textContent = ghosts.filter(function (g) { return g.caught; }).length + "/" + ghosts.length;
+  }
   function showReveal(i) {
     cancelLater(); state = "reveal"; var c = CHARS[ghosts[i].c], zom = c.type === "zombie";
     revealEl.hidden = false; restartAnims(revealEl);
-    stageEl.innerHTML = eyesSVG(zom); stageEl.hidden = false; revealIdx = i;
+    stageEl.innerHTML = ""; stageEl.hidden = true; revealIdx = i; $("#rquote").hidden = false;
     $("#photo").hidden = true; $("#sharephoto").hidden = true; $("#photobtns").hidden = false; $("#snap").hidden = false; $("#rsteps").hidden = false; markStep(1);
     after(9000, function () { if (state === "reveal" && $("#photo").hidden) markStep(2); });
     $("#rname").textContent = "Nalezeno.";
@@ -2414,7 +2427,7 @@
     if (amt > 0.05) drawGhostInto(c, W, H, delta, Math.min(0.95, amt * 1.1), look, false);
     var now = new Date(), stamp = now.getDate() + ". " + (now.getMonth() + 1) + ". " + now.getFullYear() + "  " + now.getHours() + ":" + String(now.getMinutes()).padStart(2, "0") + "  ·  Detektor typ II";
     c.textAlign = "left"; c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = W * 0.01;
-    c.font = "italic 500 " + Math.round(W * 0.05) + "px 'EB Garamond', Georgia, serif"; c.fillStyle = "rgba(232,238,234,.92)"; c.fillText(label, W * 0.045, H - W * 0.08);
+    c.font = "600 " + Math.round(W * 0.05) + "px 'Barlow Condensed', 'Arial Narrow', sans-serif"; c.fillStyle = "rgba(232,238,234,.92)"; c.fillText(label, W * 0.045, H - W * 0.08);
     c.font = Math.round(W * 0.022) + "px 'IBM Plex Mono', Menlo, monospace"; c.fillStyle = "rgba(185,214,200,.75)"; c.fillText(stamp, W * 0.045, H - W * 0.037);
     return cv;
   }
@@ -2439,6 +2452,8 @@
     lastPhoto = { blob: blob, url: out, name: label }; photos[i] = lastPhoto;
     $("#photoimg").src = out; $("#photo").hidden = false; stageEl.hidden = true; $("#sharephoto").hidden = false;
     $("#snap").hidden = true; markStep(3);
+    /* po vyfocení už úkol nedává smysl: místo něj jméno ducha a fotka */
+    $("#rquote").hidden = true; $("#rsteps").hidden = true; $("#rname").textContent = label;
     galleryAdd(blob, label);
     return gesture ? saveToPhone(blob, label) : "";
   }
@@ -2642,7 +2657,7 @@
     if (!soundOn || !audio()) return;
     var pan = rnd(-0.9, 0.9), near = 0.22 + 0.38 * k, far = 0.14 + 0.16 * k, wet = 0.8 - 0.45 * k;
     ({ creak: function () { creak(near, pan, wet); }, scrape: function () { scrape(near, pan, wet); }, steps: function () { steps(near * 0.9, pan, wet); },
-       chains: function () { chains(near * 0.5, pan, wet); }, drip: function () { drip(far * 2, pan); }, howl: function () { howl(far, pan); },
+       chains: function () { chains(near * 0.5, pan, wet); }, drip: function () { var bb = state === "play" ? nearest() : null; drip(far * 2 * (bb ? 0.25 + 0.75 * aimW(bb).back : 1), pan); }, howl: function () { howl(far, pan); },
        slam: function () { slam(far * 3, pan); }, musicbox: function () { musicBox(far * 0.9, pan); } })[name]();
   }
   function spookLoop() {
@@ -2680,7 +2695,7 @@
     tens.out.gain.setTargetAtTime(0.0001 + 0.11 * Math.pow(k, 1.6), t, 0.4);
     tens.lp.frequency.setTargetAtTime(160 + 1100 * k * k, t, 0.4);
     tens.os.forEach(function (o, j) { o.frequency.setTargetAtTime([41.2, 41.6, 61.7][j] * (1 + 0.5 * k), t, 0.8); });
-    tens.bg.gain.setTargetAtTime(0.0001 + 0.06 * k * k, t, 0.5);
+    tens.bg.gain.setTargetAtTime(0.0001 + 0.07 * k * k * (0.2 + 0.8 * tensBack), t, 0.5);
     tens.ch.gain.setTargetAtTime(here ? 0.035 : 0.0001, t, here ? 0.8 : 0.3);
     var now = performance.now();
     if (k > 0.55 && !here && now > tens.knockAt) { tens.knockAt = now + rnd(2600, 6000) * (1.6 - k); if (Math.random() < 0.6) knock(0.25 + 0.35 * k); }
@@ -2702,8 +2717,10 @@
       src.connect(bp); bp.connect(g); route(g, 0.7, pan); src.start(t, Math.random(), 0.14);
     }
   }
+  var tensBack = 1;
   function tensionLoop() {
     var b = state === "play" ? nearest() : null;
+    tensBack = b ? aimW(b).back : 1;
     if (b) tensionSet(clamp(level / 10, 0, 1), b.d <= catchR());
     else if (tens) tensionStop();
     setTimeout(tensionLoop, 250);
@@ -2718,7 +2735,7 @@
     audio(); test = false; goFull();
     if (resume) { var sv = loadSave(); setMode(sv && sv.mode || "walk"); } else setMode(m || "walk");
     if (!navigator.geolocation) { msg.textContent = "Tenhle prohlížeč neumí zjistit polohu."; return; }
-    beginBtn.disabled = true; resumeBtn.disabled = true; $("#carbtn").disabled = true; $("#failbox").hidden = true;
+    beginBtn.disabled = true; resumeBtn.disabled = true; $("#failbox").hidden = true;
     msg.textContent = "Povol polohu a kompas, až se telefon zeptá.";
     var cp = compassPermission(); /* musí se zavolat hned v gestu uživatele */
     resumeData = resume ? loadSave() : null;
@@ -2744,7 +2761,7 @@
     bootGen++;
     cancelLater(); closeGhostCam(); tensionStop(); stopWatch(); hush(); wake(false); ambience(false); state = "intro"; test = false; $("#testbar").hidden = true;
     revealEl.hidden = true; target = null; closeRitual(false); $("#scare").hidden = true; pendingSpawn = -1; spawnGen++;
-    intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; $("#carbtn").disabled = false; radar.classList.remove("boot"); radar.classList.add("off");
+    intro.hidden = false; beginBtn.disabled = false; resumeBtn.disabled = false; radar.classList.remove("boot"); radar.classList.add("off");
     saved = loadSave(); resumeBtn.hidden = !saved; msg.textContent = "";
     ghosts = []; buildDots(); drawCandles(); timeEl.textContent = "0:00"; catchBtn.disabled = true; sayEl.textContent = "";
   }
@@ -2755,7 +2772,7 @@
     revealEl.hidden = false; restartAnims(revealEl);
     stageEl.innerHTML = '<div class="time">' + time + "</div>" + (photos.filter(Boolean).length ? '<div class="gallery">' + photos.filter(Boolean).map(function (ph) { return '<img src="' + ph.url + '" alt="' + ph.name + '">'; }).join("") + "</div>" : "");
     stageEl.hidden = false; $("#photo").hidden = true; $("#photobtns").hidden = true; $("#rsteps").hidden = true;
-    $("#rname").textContent = "Ticho.";
+    $("#rname").textContent = "Ticho."; $("#rquote").hidden = false;
     $("#rquote").textContent = NUM[N][1] + " Svíčky hoří.";
     var fin = "Ticho. " + NUM[N][1] + " Tvůj čas je " + time + ".";
     /* auto: závěr jízdy se jmény všech pěti strašidel */
@@ -2794,7 +2811,7 @@
   var TYPE_TEXT = {
     plachy: { strong: ["Plaché.", "Je plaché. Zpomal, ať neuteče."], close: ["Pomalu.", "Pomalu. Po špičkách."], here: ["Je tady.", "Stojí tu. Ťukni na ruku, ale nespěchej."] },
     spac: { strong: ["Spí.", "Tady někde spí. Buď potichu."], close: ["Potichu.", "Je kousek. Nedupej."], here: ["Spí tady.", "Spí přímo tady. Ťukni na ruku."] },
-    zvedavec: { strong: ["Vidí tě.", "Všimlo si tě. Zastav se a čekej."], close: ["Stůj.", "Plíží se k tobě. Stůj jako socha."], here: ["Je u tebe.", "Je u tebe. Ťukni na ruku."] },
+    zvedavec: { strong: ["Blíží se.", "Zastav se. Něco se blíží."], close: ["Stůj.", "Stůj a nehýbej se. Blíží se."], here: ["Je u tebe.", "Je u tebe. Ťukni na ruku."] },
     schovavac: { strong: ["Něco tu je.", "Něco se tu schovává…"], close: ["Ticho…", "Ticho… je blízko."], here: ["Je tady.", "Teď ho máš. Ťukni na ruku."] }
   };
   function tooFastFor(g) { return mode === "walk" && g.t === "plachy" && curSpeed() > 1.6; }
@@ -2807,6 +2824,8 @@
       if (d < 25 && sp > 2 && Date.now() - (g.fleeAt || 0) > 6000 && (g.flees || 0) < 3) flee(g);
     } else if (g.t === "zvedavec") {
       if (d < 35 && d > 2.5 && sp < 0.7) { var q = offset(g, 0.8 * dt, bearing(g, pos)); g.lat = q.lat; g.lon = q.lon; }
+      /* těsně předtím, než k hráči dorazí: lekačka */
+      if (!g.scared && d <= 5) jumpScare(g, "Je u tebe! Neboj se, teď ho chytíš.");
     } else if (g.t === "schovavac") {
       if (!g.scared && d <= 15) jumpScare(g);
     }
@@ -2825,10 +2844,10 @@
     sayEl.textContent = t; speak(t, true); whisper(0.12, 1.4); vibe([80, 40, 80]);
   }
   /* schovávač vyskočí, když se k němu přiblížíš (lekačku jde vypnout v nastavení) */
-  function jumpScare(g) {
+  function jumpScare(g, said) {
     g.scared = true; save();
     lastBand = bandOf(dist(pos, g));
-    var line = "Vyskočilo na tebe! Neboj se, teď ho chytíš.";
+    var line = said || "Vyskočilo na tebe! Neboj se, teď ho chytíš.";
     if (!scareOn) { line = "Tady se něco schovávalo. Teď ho máš."; sayEl.textContent = line; speak(line, true); return; }
     var el = $("#scare"); el.innerHTML = eyesSVG(CHARS[g.c].type === "zombie"); el.hidden = false;
     hush(); scream(); vibe([300, 60, 300, 60, 500]);
@@ -2892,7 +2911,15 @@
     var moved = (test || motionSeen) && lastMoveAt > ritual.stepAt;
     var since = moved ? lastMoveAt : ritual.stepAt, p = clamp((now - since) / 8000, 0, 1);
     fill.style.width = (p * 100).toFixed(1) + "%";
-    if (note) note.textContent = moved && now - lastMoveAt < 1300 ? "Probouzí se! Znovu a úplně klidně." : "Klid…";
+    /* zvuková lekačka: v náhodnou chvíli spáč ze spaní vykřikne nebo něco bouchne. Kdo se lekne a pohne, začíná znovu. */
+    if (!ritual.scareAt) ritual.scareAt = ritual.stepAt + rnd(2800, 5500);
+    if (!ritual.scared && now >= ritual.scareAt && p < 0.95) {
+      ritual.scared = true; ritual.scaredAt = now;
+      if (scareOn) { var pick = Math.floor(Math.random() * 3); if (pick === 0) scream(); else if (pick === 1) { slam(0.7, rnd(-0.6, 0.6)); setTimeout(function () { knock(0.6); }, 350); } else shriek(0.5, rnd(-0.6, 0.6)); vibe([250, 60, 250]); }
+      else knock(0.3);
+    }
+    var justScared = ritual.scared && now - ritual.scaredAt < 1800;
+    if (note) note.textContent = moved && now - lastMoveAt < 1300 ? "Probouzí se! Znovu a úplně klidně." : justScared ? "Nelekej se! Drž úplně klidně." : "Klid…";
     if (p >= 1) { vibe(60); nextRitual(); }
   }
   function setupCircle(cv) {
@@ -2978,7 +3005,7 @@
     var car = mode === "car", t = !car && g && g.t;
     if (band === "here") return fast ? ["front_hand", "Stůj! Je tady, ale nesmíš spěchat.", true] : ["back_hand", "Je tady! Ťukni dole na ruku a chyť ho.", true];
     if (t === "plachy" && (band === "strong" || band === "close")) return ["do_not_step", "Je plaché. Jdi pomalu, neběhej!"];
-    if (t === "zvedavec" && (band === "strong" || band === "close")) return ["accessibility_new", "Zastav se a stůj. Přijde k tobě samo."];
+    if (t === "zvedavec" && (band === "strong" || band === "close")) return ["accessibility_new", "Zastav se a stůj. Něco se blíží."];
     if (t === "spac" && (band === "strong" || band === "close")) return ["bedtime", "Spí. Jdi potichu, nedupej."];
     if (band === "close") return ["visibility", car ? "Už je blízko u silnice. Připrav ruku!" : "Je skoro u tebe. Zpomal a rozhlížej se."];
     if (band === "strong") return ["hearing", car ? "Signál sílí, blížíme se." : "Jsi blízko. Jdi pomalu a poslouchej."];
@@ -3089,22 +3116,29 @@
   var nextCall = 0;
   /* Hlas ducha podle jeho povahy (pěšky) nebo druhu (v autě): úpění, skřeky, chrápání, kňourání, šepot.
      Hlasitost podle vzdálenosti, ve sluchátkách zleva nebo zprava. Směr hlídá šum (dirStatic). */
-  function ghostVoice(g, vol, wet, pan, found) {
+  /* vf = váha hlasu (úpění, skřek, kňourání: nejhlasitější, když je duch před hráčem),
+     nf = váha šumů (chrápání, chrčení, šepot: nejhlasitější, když je duch za zády) */
+  function ghostVoice(g, vol, wet, pan, found, vf, nf) {
     var t = mode === "walk" ? g.t : null, ch = CHARS[g.c] || CHARS[0];
-    if (t === "plachy") shriek(vol, pan);
-    else if (t === "spac") { snore(vol, pan); if (found || Math.random() < 0.5) setTimeout(function () { moan(170, vol * 0.8, 2.6, wet, pan); }, 1900); }
-    else if (t === "zvedavec") whimper(300, vol, wet, pan);
-    else if (t === "schovavac") { if (found) shriek(vol * 1.2, pan); else whisper(vol * 0.6, 1.8, pan); }
-    else if (ch.type === "zombie") groan(ch.hoo, vol * 1.15, wet, pan);
-    else moan(ch.hoo * 0.8, vol, 2.4, wet, pan);
+    if (vf == null) vf = 1; if (nf == null) nf = 1;
+    if (t === "plachy") shriek(vol * vf, pan);
+    else if (t === "spac") { snore(vol * nf, pan); if (found || Math.random() < 0.5) setTimeout(function () { moan(170, vol * 0.8 * vf, 2.6, wet, pan); }, 1900); }
+    else if (t === "zvedavec") whimper(300, vol * vf, wet, pan);
+    else if (t === "schovavac") { if (found) shriek(vol * 1.2 * vf, pan); else whisper(vol * 0.6 * nf, 1.8, pan); }
+    else if (ch.type === "zombie") groan(ch.hoo, vol * 1.15 * nf, wet, pan);
+    else moan(ch.hoo * 0.8, vol * vf, 2.4, wet, pan);
   }
+  /* kde je duch vůči hráči: front 1 = přímo před ním, back 1 = přímo za zády; bez kompasu obojí 1 */
+  function aimW(b) { var a = aimAt(b); return a === null ? { front: 1, back: 1 } : { front: (1 + a) / 2, back: (1 - a) / 2 }; }
   function callLoop() {
     var b = state === "play" ? nearest() : null, now = performance.now();
     if (b && now >= nextCall && b.d > catchR()) {
       var k = clamp(1 - (b.d - catchR() * 0.4) / (M.bands[2] * 1.4), 0, 1);
       var hd = curHeading(), pan = hd.h === null ? 0 : Math.sin(rad(bearing(pos, b.g) - hd.h)) * 0.9;
-      ghostVoice(b.g, 0.05 + 0.24 * k, 0.85 - 0.5 * k, pan, false);
-      if (Math.random() < 0.25 + 0.3 * k && b.g.t !== "schovavac") setTimeout(function () { whisper(0.03 + 0.07 * k, 1.6, pan); }, 2600);
+      /* hlasitost roste s blízkostí výrazně, hlasy zepředu, šumy zezadu */
+      var w = aimW(b), vf = 0.25 + 0.75 * Math.pow(w.front, 1.5), nf = 0.25 + 0.75 * Math.pow(w.back, 1.5);
+      ghostVoice(b.g, 0.04 + 0.36 * Math.pow(k, 1.2), 0.85 - 0.55 * k, pan, false, vf, nf);
+      if (Math.random() < 0.25 + 0.3 * k && b.g.t !== "schovavac") setTimeout(function () { whisper((0.03 + 0.08 * k) * nf, 1.6, pan); }, 2600);
       nextCall = now + 6500 - 5200 * k + rnd(-600, 600);
     }
     setTimeout(callLoop, 250);
@@ -3175,7 +3209,7 @@
     var b = state === "play" ? nearest() : null, v = 0;
     if (b && b.d > catchR()) {
       var aim = aimAt(b);
-      v = aim === null ? 0.02 : 0.003 + 0.13 * Math.pow((1 - aim) / 2, 1.2); /* bez kompasu jen slabounce */
+      v = aim === null ? 0.02 : 0.003 + 0.16 * Math.pow((1 - aim) / 2, 1.5); /* za zády nejvíc; bez kompasu jen slabounce */
     }
     if (stat || v > 0) dirStatic(v);
     setTimeout(staticLoop, 120);
@@ -3310,7 +3344,6 @@
   var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   if (isIOS && !standalone) $("#ioshint").hidden = false;
   beginBtn.addEventListener("click", function () { begin(false, "walk"); });
-  $("#carbtn").addEventListener("click", function () { begin(false, "car"); });
   resumeBtn.addEventListener("click", function () { begin(true); });
   testBtn.addEventListener("click", startTest);
   $("#voicesel").addEventListener("change", function () {
