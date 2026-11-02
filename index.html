@@ -1272,11 +1272,12 @@
     function v() { var n = 0, m = 1, c; do { c = u[p++]; n += (c & 127) * m; m *= 128; } while (c & 128); return n; }
     function z() { var n = v(); return n % 2 ? -(n + 1) / 2 : n / 2; }
     function pts() { var k = v(), o = new Array(k * 2), x = 0, y = 0; for (var i = 0; i < k; i++) { x += z(); y += z(); o[2 * i] = x; o[2 * i + 1] = y; } return o; }
-    v(); var tx = v(), ty = v(), E = v(), T = { tx: tx, ty: ty, E: E, w: [], b: [], a: [], r: [], p: [] }, n, i;
+    v(); var tx = v(), ty = v(), E = v(), T = { tx: tx, ty: ty, E: E, w: [], b: [], a: [], r: [], p: [] }, n, i, names = [""], td = new TextDecoder();
+    for (n = v(), i = 0; i < n; i++) { var L = v(); names.push(td.decode(u.subarray(p, p + L))); p += L; }
     for (n = v(), i = 0; i < n; i++) {
-      var hw = CZ_HW[u[p++]], f = u[p++], sv = CZ_SVC[u[p++]] || "", fl = "";
+      var hw = CZ_HW[u[p++]], f = u[p++], sv = CZ_SVC[u[p++]] || "", nm = names[v()] || "", fl = "";
       CZ_FL.forEach(function (q) { if (f & q[0]) fl += q[1]; });
-      T.w.push({ hw: hw, nm: f & 1 ? "1" : "", fl: fl, svc: sv, c: pts() });
+      T.w.push({ hw: hw, nm: nm || (f & 1 ? "1" : ""), name: nm, fl: fl, svc: sv, c: pts() });
     }
     for (n = v(), i = 0; i < n; i++) T.b.push(pts());
     for (n = v(), i = 0; i < n; i++) { var ka = CZ_WATER[u[p++]] || "water"; T.a.push({ k: ka, c: pts() }); }
@@ -1370,8 +1371,40 @@
       c.strokeStyle = "rgb(86,128,110)"; c.lineWidth = u(3.8); c.stroke(P.minor);
       c.strokeStyle = "rgb(132,116,82)"; c.lineWidth = u(6.5); c.stroke(P.major);
     });
+    drawStreetLabels(c, W, H, hdeg, f, g, loaded);
     mapCv.classList.add("recolor");
     return true;
+  }
+  /* jména ulic podél ulic: nejbližší úsek každé ulice, čitelně (ne vzhůru nohama), nejvýš 6 a bez překrývání */
+  function drawStreetLabels(c, W, H, hdeg, f, g, loaded) {
+    var dpr = W / Math.max(1, mapCv.clientWidth), a = -rad(hdeg), ca = Math.cos(a), sa = Math.sin(a), R = Math.min(W, H) * 0.4, best = {};
+    function scr(x, y) { var X = x * f, Y = y * f; return [W / 2 + X * ca - Y * sa, H / 2 + X * sa + Y * ca]; }
+    loaded.forEach(function (T) {
+      var ox = T.tx * T.E - g.x, oy = T.ty * T.E - g.y;
+      T.w.forEach(function (w) {
+        if (!w.name || w.fl.indexOf("t") >= 0 || (FOOTW.test(w.hw) && w.hw !== "pedestrian")) return;
+        for (var i = 2; i + 1 < w.c.length; i += 2) {
+          var p1 = scr(ox + w.c[i - 2], oy + w.c[i - 1]), p2 = scr(ox + w.c[i], oy + w.c[i + 1]);
+          var mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2, L = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), dc = Math.hypot(mx - W / 2, my - H / 2);
+          if (L < 46 * dpr || dc > R) continue;
+          var sc = dc - L * 0.3;
+          if (!best[w.name] || sc < best[w.name].sc) best[w.name] = { sc: sc, mx: mx, my: my, L: L, ang: Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) };
+        }
+      });
+    });
+    var list = Object.keys(best).map(function (k) { var b = best[k]; b.t = k; return b; }).sort(function (x, y) { return x.sc - y.sc; }), placed = [];
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    c.font = "600 " + Math.round(10.5 * dpr) + "px 'Barlow Condensed', 'Arial Narrow', sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
+    list.forEach(function (b) {
+      if (placed.length >= 6 || placed.some(function (q) { return Math.hypot(q[0] - b.mx, q[1] - b.my) < 60 * dpr; })) return;
+      var t = b.t.toUpperCase(), tw = c.measureText(t).width; if (tw > b.L * 1.6) return;
+      var ang = b.ang; if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
+      c.setTransform(1, 0, 0, 1, b.mx, b.my); c.rotate(ang);
+      c.lineWidth = 3 * dpr; c.strokeStyle = "rgba(5,9,7,.85)"; c.strokeText(t, 0, 0);
+      c.fillStyle = "rgba(196,224,210,.82)"; c.fillText(t, 0, 0);
+      placed.push([b.mx, b.my]);
+    });
+    c.restore();
   }
   function osmWalkArea(o) {
     var t0 = performance.now(), fresh = cachedMap(o, 14 * 86400000);

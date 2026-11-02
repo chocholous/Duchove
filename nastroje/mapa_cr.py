@@ -5,7 +5,8 @@ Dlaždice je binární a zkomprimovaná gzipem (hra ji rozbalí sama), souřadni
 
 Obsah dlaždice (vše čísla varint, souřadnice rozdílově a zigzag):
   hlavička "LD1", z, x, y, rozměr
-  cesty:   typ, příznaky, druh chodníku/služby, body   (příznaky: 1 má jméno, 2 most, 4 tunel, 8 uvnitř,
+  jména:   počet, pak každé jméno jako délka + UTF-8
+  cesty:   typ, příznaky, druh chodníku/služby, jméno (0 = žádné, jinak pořadí v tabulce + 1), body   (příznaky: 1 má jméno, 2 most, 4 tunel, 8 uvnitř,
                                                        16 zákaz vstupu, 32 krytá, 64 pěší zákaz, 128 pěší výslovně smí)
   domy:    obrysy bloků (sousední domy sloučené, kůlny pod 12 m² vynechané)
   voda:    druh, obrys (oříznutý na dlaždici)
@@ -122,9 +123,10 @@ class Tiles:
         if tags.get("foot") in ("yes", "designated", "permissive"): fl |= 128
         sv = tags.get("footway") if hw == "footway" else tags.get("service")
         svc = SVC.index(sv) if sv in SVC else (6 if sv else 0)
+        name = tags.get("name") or ""
         pts = simplify(dedup(pts), 0.5)
         for key, rl in line_runs(pts).items():
-            for r in rl: self.t[key]["w"].append((HWI[hw], fl, svc, r))
+            for r in rl: self.t[key]["w"].append((HWI[hw], fl, svc, name, r))
         self.count["w"] += 1
 
     def waterway(self, kind, pts):
@@ -196,8 +198,11 @@ def pts_enc(pts, ox, oy, out):
 def tile_bytes(tx, ty, d, unit_m2):
     out = bytearray(b"LD1"); vi(Z, out); vi(tx, out); vi(ty, out); vi(E, out)
     ox, oy = tx * E, ty * E
+    names = sorted({w[3] for w in d["w"] if w[3]}); ni = {n: i + 1 for i, n in enumerate(names)}
+    vi(len(names), out)
+    for n in names: b = n.encode("utf-8"); vi(len(b), out); out += b
     vi(len(d["w"]), out)
-    for hw, fl, svc, r in d["w"]: out.append(hw); out.append(fl); out.append(svc); pts_enc(r, ox, oy, out)
+    for hw, fl, svc, name, r in d["w"]: out.append(hw); out.append(fl); out.append(svc); vi(ni.get(name, 0), out); pts_enc(r, ox, oy, out)
     bl = blocks(d["b"], unit_m2); d["b"] = None
     vi(len(bl), out)
     for r in bl: pts_enc(r, ox, oy, out)
