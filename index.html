@@ -1377,7 +1377,7 @@
   function czStahniOblast(o) {
     var g = czG(o.lat, o.lon), url = pmUrl(Math.floor(g.x / CZ_E), Math.floor(g.y / CZ_E));
     if (typeof caches === "undefined") return Promise.reject(new Error("prohlížeč neumí ukládat"));
-    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+    keepStorage();
     return fetch(url, { cache: "no-cache" }).then(function (r) {
       if (!r.ok) throw new Error("oblast není v mapě");
       return r.blob();
@@ -3622,8 +3622,13 @@
   }
   var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   if (isIOS && !standalone) $("#ioshint").hidden = false;
-  beginBtn.addEventListener("click", function () { begin(false, "walk"); });
-  resumeBtn.addEventListener("click", function () { begin(true); });
+  /* trvalé úložiště: bez něj smí prohlížeč uloženou mapu při nedostatku místa smazat. Chrome a Safari rozhodnou samy
+     (nainstalovaná aplikace, častá návštěva), Firefox se jednou zeptá. Proto až po kliknutí na start hry. */
+  function keepStorage() {
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persisted().then(function (p) { if (!p) return navigator.storage.persist(); }).catch(function () {}); } catch (e) {}
+  }
+  beginBtn.addEventListener("click", function () { keepStorage(); begin(false, "walk"); });
+  resumeBtn.addEventListener("click", function () { keepStorage(); begin(true); });
   testBtn.addEventListener("click", startTest);
   $("#voicesel").addEventListener("change", function () {
     var uri = this.value;
