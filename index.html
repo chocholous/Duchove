@@ -463,6 +463,7 @@
   .dot.tgt.hid { opacity: .22 !important; }
   /* Lekačka schovávače: záblesk, oči přes celou obrazovku, třes */
   .scare { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; overflow: hidden; background: #000; animation: scareBg 1.8s steps(1) forwards; }
+  .scare .sghost { height: min(96vh, 900px); width: auto; max-width: none; opacity: 1; animation: scareIn .25s cubic-bezier(.2, 2, .4, 1) both, scareShake .08s linear .25s 14; filter: brightness(1.35) contrast(1.15); }
   .scare .eyes { width: min(150vw, 900px); opacity: 1; animation: scareIn .25s cubic-bezier(.2, 2, .4, 1) both, scareShake .08s linear .25s 14; }
   @keyframes scareBg { 0% { background: #f4efe4; } 7% { background: #000; } 14% { background: #3a0905; } 22% { background: #000; } 100% { background: #000; } }
   @keyframes scareIn { from { transform: scale(.05); } to { transform: scale(1); } }
@@ -471,7 +472,7 @@
   .pulse { position: fixed; inset: 0; z-index: 29; pointer-events: none; opacity: 0; box-shadow: inset 0 0 80px 22px rgba(var(--blood-rgb), .75); }
   .pulse.go { animation: pulseFx .45s ease-out; }
   @keyframes pulseFx { 0% { opacity: var(--s, 1); } 100% { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .scare, .scare .eyes, .pulse.go { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .scare, .scare .eyes, .scare .sghost, .pulse.go { animation: none !important; } }
 
   @media (max-height: 700px) { .say { min-height: 2.6em; font-size: 18px; } .top { min-height: 40px; } .candle { height: 32px; width: 14px; } }
   @media (max-height: 640px) {
@@ -2198,7 +2199,13 @@
   }
   /* Postavy se kreslí jednou do průhledného plátna 400×640 a pak se jen skládají do obrazu */
   var spriteCache = {};
+  /* Duchové jako bitmapy (duchove/*.png, rozmazané, mlhavé); dokud se nenačtou, kreslí se náhradní postava */
+  var GHOST_IMG = {};
+  ["pani", "mnich", "prosteradlo", "stin", "orby", "zombie", "klekanice"].forEach(function (l) {
+    var im = new Image(); im.decoding = "async"; im.onload = function () { GHOST_IMG[l] = im; }; im.src = "duchove/" + l + ".png";
+  });
   function sprite(look) {
+    if (GHOST_IMG[look]) return GHOST_IMG[look];
     if (spriteCache[look]) return spriteCache[look];
     var cv = document.createElement("canvas"); cv.width = 400; cv.height = 640;
     var c = cv.getContext("2d"), lg = function (y0, y1, a0, a1, col) { var g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, "rgba(" + col + "," + a0 + ")"); g.addColorStop(1, "rgba(" + col + "," + a1 + ")"); return g; };
@@ -2849,7 +2856,9 @@
     lastBand = bandOf(dist(pos, g));
     var line = said || "Vyskočilo na tebe! Neboj se, teď ho chytíš.";
     if (!scareOn) { line = "Tady se něco schovávalo. Teď ho máš."; sayEl.textContent = line; speak(line, true); return; }
-    var el = $("#scare"); el.innerHTML = eyesSVG(CHARS[g.c].type === "zombie"); el.hidden = false;
+    /* lekačka: místo očí záblesk ducha přes celou obrazovku (rozmazaná bitmapa) */
+    var gi = ghosts.indexOf(g), lk = gi >= 0 ? lookOf(gi) : "klekanice";
+    var el = $("#scare"); el.innerHTML = '<img class="sghost" alt="" src="duchove/' + lk + '.png">'; el.hidden = false;
     hush(); scream(); vibe([300, 60, 300, 60, 500]);
     clearTimeout(scareT);
     scareT = setTimeout(function () { el.hidden = true; el.innerHTML = ""; if (state === "play") { sayEl.textContent = line; speak(line, true); } }, 1800);
