@@ -1244,9 +1244,19 @@
       });
   }
   /* ---------- Mapa celé ČR přímo v aplikaci ----------
-     mapa/13/x/y.json (nastroje/mapa_cr.py): cesty, domy, voda, řeky a body pro úkoly, dlaždice asi 4,8 × 4,8 km.
+     mapa/14/x/y.bin (nastroje/mapa_cr.py): cesty, domy (bloky), voda, řeky a body pro úkoly, dlaždice asi 2,4 × 2,4 km,
+     binární a zkomprimované gzipem (rozbalí je prohlížeč sám přes DecompressionStream).
      Hra si stáhne jen 1–4 dlaždice kolem hráče z vlastního webu. Mimo ČR zůstávají záložní mapové servery. */
-  var CZ_Z = 13, CZ_N = 8192, CZ_E = 4096, czCache = {};
+  var CZ_Z = 14, CZ_N = 16384, CZ_E = 1024, czCache = {};
+  /* číselníky: musí sedět s nastroje/mapa_cr.py */
+  var CZ_HW = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street", "service",
+    "pedestrian", "track", "footway", "path", "cycleway", "bridleway", "steps", "road", "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"];
+  var CZ_SVC = ["", "crossing", "sidewalk", "driveway", "parking_aisle", "alley", "other"];
+  var CZ_WATER = ["water", "reservoir", "basin", "pond", "lake", "river", "oxbow", "canal", "fishpond", "riverbank"];
+  var CZ_RIVER = ["river", "stream", "canal", "brook", "ditch", "drain"];
+  var CZ_POI = ["bench", "street_lamp", "playground", "picnic_table", "waste_basket", "post_box", "fire_hydrant", "drinking_water",
+    "bicycle_parking", "shelter", "information", "gate", "fountain", "tree", "cross", "shrine", "church"];
+  var CZ_FL = [[1, ""], [2, "b"], [4, "t"], [8, "i"], [16, "a"], [32, "c"], [64, "f"], [128, "F"]];
   function czG(lat, lon) {
     var s = Math.sin(rad(clamp(lat, -85, 85)));
     return { x: (lon + 180) / 360 * CZ_N * CZ_E, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * CZ_N * CZ_E };
@@ -1255,19 +1265,35 @@
     var X = gx / (CZ_N * CZ_E), Y = gy / (CZ_N * CZ_E);
     return { lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * Y))) * 180 / Math.PI, lon: X * 360 - 180 };
   }
-  function undelta(a) { var o = new Array(a.length), x = 0, y = 0; for (var i = 0; i + 1 < a.length; i += 2) { x += a[i]; y += a[i + 1]; o[i] = x; o[i + 1] = y; } return o; }
-  function czDecode(d) {
-    return { tx: d.x, ty: d.y, E: d.e || CZ_E,
-      w: (d.w || []).map(function (w) { return { hw: w[0], nm: w[1], fl: w[2] || "", svc: w[3] || "", c: undelta(w[4]) }; }),
-      b: (d.b || []).map(undelta), a: (d.a || []).map(function (a) { return { k: a[0], c: undelta(a[1]) }; }),
-      r: (d.r || []).map(function (r) { return { k: r[0], c: undelta(r[1]) }; }), p: d.p || [] };
+  /* binární dlaždice "LD1": čísla varint, souřadnice rozdílově a zigzag (viz nastroje/mapa_cr.py) */
+  function czDecode(buf) {
+    var u = new Uint8Array(buf), p = 3;
+    if (u[0] !== 76 || u[1] !== 68 || u[2] !== 49) throw new Error("dlaždice: neznámý formát");
+    function v() { var n = 0, m = 1, c; do { c = u[p++]; n += (c & 127) * m; m *= 128; } while (c & 128); return n; }
+    function z() { var n = v(); return n % 2 ? -(n + 1) / 2 : n / 2; }
+    function pts() { var k = v(), o = new Array(k * 2), x = 0, y = 0; for (var i = 0; i < k; i++) { x += z(); y += z(); o[2 * i] = x; o[2 * i + 1] = y; } return o; }
+    v(); var tx = v(), ty = v(), E = v(), T = { tx: tx, ty: ty, E: E, w: [], b: [], a: [], r: [], p: [] }, n, i;
+    for (n = v(), i = 0; i < n; i++) {
+      var hw = CZ_HW[u[p++]], f = u[p++], sv = CZ_SVC[u[p++]] || "", fl = "";
+      CZ_FL.forEach(function (q) { if (f & q[0]) fl += q[1]; });
+      T.w.push({ hw: hw, nm: f & 1 ? "1" : "", fl: fl, svc: sv, c: pts() });
+    }
+    for (n = v(), i = 0; i < n; i++) T.b.push(pts());
+    for (n = v(), i = 0; i < n; i++) { var ka = CZ_WATER[u[p++]] || "water"; T.a.push({ k: ka, c: pts() }); }
+    for (n = v(), i = 0; i < n; i++) { var kr = CZ_RIVER[u[p++]] || "stream"; T.r.push({ k: kr, c: pts() }); }
+    for (n = v(), i = 0; i < n; i++) { var kp = CZ_POI[u[p++]]; T.p.push([kp, v(), v()]); }
+    return T;
+  }
+  function gunzip(buf) {
+    if (typeof DecompressionStream === "undefined") return Promise.reject(new Error("prohlížeč neumí rozbalit mapu"));
+    return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
   }
   /* jedna dlaždice: { st: "load"|"ok"|"none", d, pr } — chybějící (mimo ČR) se znovu nezkouší */
   function czTile(tx, ty) {
     var k = tx + "/" + ty, T = czCache[k];
     if (T) return T;
     T = czCache[k] = { st: "load" };
-    T.pr = fetch("mapa/13/" + k + ".json").then(function (r) { if (!r.ok) throw new Error("mimo ČR"); return r.json(); })
+    T.pr = fetch("mapa/14/" + k + ".bin").then(function (r) { if (!r.ok) throw new Error("mimo ČR"); return r.arrayBuffer(); }).then(gunzip)
       .then(function (d) { T.d = czDecode(d); T.st = "ok"; mapDirty = true; return T.d; },
             function (e) { T.st = "none"; mapDirty = true; throw e; });
     T.pr.catch(function () {});

@@ -1,48 +1,55 @@
-"""Mapa celé ČR přímo v aplikaci: z výřezu OpenStreetMap udělá dlaždice mapa/13/x/y.json.
+"""Mapa celé ČR přímo v aplikaci: z výřezu OpenStreetMap udělá dlaždice mapa/14/x/y.bin.
 
-Hra si pak stáhne jen 1–4 dlaždice kolem hráče z vlastního webu, bez mapových serverů.
-V každé dlaždici (asi 4,8 × 4,8 km, souřadnice 0–4096 ≈ 1,2 m):
-  w: cesty a ulice   [typ, jméno, příznaky, služba/chodník, souřadnice]
-     příznaky: b most, t tunel, i uvnitř, a zákaz vstupu, c krytá, f pěší zákaz, F pěší výslovně smí
-  b: domy            [souřadnice obrysu]
-  a: vodní plochy    [druh, souřadnice obrysu]   (oříznuté na dlaždici)
-  r: vodní toky      [druh, souřadnice]
-  p: body pro úkoly  [druh, x, y]                 (lavička, lampa, hřiště, strom…)
-Souřadnice jsou celá čísla v rámci dlaždice, zapsané rozdílově: x0,y0,dx1,dy1,…
+Hra si stáhne jen 1–4 dlaždice kolem hráče (asi 2,4 × 2,4 km) z vlastního webu, bez mapových serverů.
+Dlaždice je binární a zkomprimovaná gzipem (hra ji rozbalí sama), souřadnice 0–1023 (asi 2,4 m).
+
+Obsah dlaždice (vše čísla varint, souřadnice rozdílově a zigzag):
+  hlavička "LD1", z, x, y, rozměr
+  cesty:   typ, příznaky, druh chodníku/služby, body   (příznaky: 1 má jméno, 2 most, 4 tunel, 8 uvnitř,
+                                                       16 zákaz vstupu, 32 krytá, 64 pěší zákaz, 128 pěší výslovně smí)
+  domy:    obrysy bloků (sousední domy sloučené, kůlny pod 12 m² vynechané)
+  voda:    druh, obrys (oříznutý na dlaždici)
+  toky:    druh, body
+  body:    druh, x, y   (lavička, lampa, hřiště, strom, kříž…)
+Číselníky (HW, SVC, WATER, RIVER, POI) musí sedět s index.html.
 
 Spuštění:
-  pip install osmium
+  pip install osmium shapely
   curl -LO https://download.openstreetmap.fr/extracts/europe/czech_republic-latest.osm.pbf
   python3 nastroje/mapa_cr.py czech_republic-latest.osm.pbf
 Data: © OpenStreetMap contributors (ODbL).
 """
-import json, math, os, sys, time
+import gzip, json, math, os, sys, time
 from collections import defaultdict
 import osmium
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
-Z = 13
-E = 4096                       # body na dlaždici
+Z = 14
+E = 1024                        # body na dlaždici (asi 2,4 m)
 N = 2 ** Z
 OUT = os.environ.get("MAPA_OUT") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "mapa", str(Z))
 
-ROAD = {"motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street",
-        "service", "pedestrian", "track", "footway", "path", "cycleway", "bridleway", "steps", "road",
-        "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"}
-WATERWAY = {"river", "stream", "canal", "brook", "ditch", "drain"}
+HW = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street", "service",
+      "pedestrian", "track", "footway", "path", "cycleway", "bridleway", "steps", "road",
+      "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"]
+SVC = ["", "crossing", "sidewalk", "driveway", "parking_aisle", "alley", "other"]
+WATER = ["water", "reservoir", "basin", "pond", "lake", "river", "oxbow", "canal", "fishpond", "riverbank"]
+RIVER = ["river", "stream", "canal", "brook", "ditch", "drain"]
+POIK = ["bench", "street_lamp", "playground", "picnic_table", "waste_basket", "post_box", "fire_hydrant", "drinking_water",
+        "bicycle_parking", "shelter", "information", "gate", "fountain", "tree", "cross", "shrine", "church"]
 POI = {("amenity", "bench"): "bench", ("highway", "street_lamp"): "street_lamp", ("leisure", "playground"): "playground",
        ("leisure", "picnic_table"): "picnic_table", ("amenity", "waste_basket"): "waste_basket", ("amenity", "post_box"): "post_box",
        ("emergency", "fire_hydrant"): "fire_hydrant", ("amenity", "drinking_water"): "drinking_water",
        ("amenity", "bicycle_parking"): "bicycle_parking", ("amenity", "shelter"): "shelter", ("tourism", "information"): "information",
        ("barrier", "gate"): "gate", ("amenity", "fountain"): "fountain", ("natural", "tree"): "tree",
        ("historic", "wayside_cross"): "cross", ("historic", "wayside_shrine"): "shrine", ("amenity", "place_of_worship"): "church"}
+HWI = {k: i for i, k in enumerate(HW)}; WI = {k: i for i, k in enumerate(WATER)}; RI = {k: i for i, k in enumerate(RIVER)}; PI = {k: i for i, k in enumerate(POIK)}
 
 
 def gxy(lon, lat):
-    """zeměpisné souřadnice -> celé body v celém světě na úrovni Z"""
     s = math.sin(math.radians(max(-85.0, min(85.0, lat))))
-    x = (lon + 180.0) / 360.0 * N * E
-    y = (0.5 - math.log((1 + s) / (1 - s)) / (4 * math.pi)) * N * E
-    return int(round(x)), int(round(y))
+    return (int(round((lon + 180.0) / 360.0 * N * E)), int(round((0.5 - math.log((1 + s) / (1 - s)) / (4 * math.pi)) * N * E)))
 
 
 def dedup(pts):
@@ -53,13 +60,10 @@ def dedup(pts):
 
 
 def simplify(pts, tol):
-    """Douglas-Peucker na celých bodech"""
     if len(pts) < 3: return pts
-    keep = [False] * len(pts); keep[0] = keep[-1] = True
-    st = [(0, len(pts) - 1)]
+    keep = [False] * len(pts); keep[0] = keep[-1] = True; st = [(0, len(pts) - 1)]
     while st:
-        a, b = st.pop()
-        ax, ay = pts[a]; bx, by = pts[b]; dx, dy = bx - ax, by - ay; L = math.hypot(dx, dy) or 1e-9
+        a, b = st.pop(); ax, ay = pts[a]; bx, by = pts[b]; dx, dy = bx - ax, by - ay; L = math.hypot(dx, dy) or 1e-9
         best, bi = -1, -1
         for i in range(a + 1, b):
             px, py = pts[i]
@@ -69,19 +73,7 @@ def simplify(pts, tol):
     return [p for p, k in zip(pts, keep) if k]
 
 
-def enc(pts, tx, ty):
-    """lokální souřadnice dlaždice, rozdílově"""
-    out = []; px = py = 0
-    for i, (x, y) in enumerate(pts):
-        lx, ly = x - tx * E, y - ty * E
-        if i == 0: out += [lx, ly]
-        else: out += [lx - px, ly - py]
-        px, py = lx, ly
-    return out
-
-
 def line_runs(pts):
-    """rozdělí čáru na kusy podle dlaždic, kterými prochází (úsek patří do všech dlaždic, kterých se dotkne)"""
     runs = defaultdict(list)
     for i in range(1, len(pts)):
         (x1, y1), (x2, y2) = pts[i - 1], pts[i]
@@ -94,7 +86,6 @@ def line_runs(pts):
 
 
 def clip_poly(pts, x0, y0, x1, y1):
-    """Sutherland-Hodgman: obrys oříznutý na obdélník dlaždice"""
     def clip(poly, inside, inter):
         out = []
         for i in range(len(poly)):
@@ -107,10 +98,10 @@ def clip_poly(pts, x0, y0, x1, y1):
     def ix(a, b, x): t = (x - a[0]) / ((b[0] - a[0]) or 1e-9); return (x, int(round(a[1] + (b[1] - a[1]) * t)))
     def iy(a, b, y): t = (y - a[1]) / ((b[1] - a[1]) or 1e-9); return (int(round(a[0] + (b[0] - a[0]) * t)), y)
     p = pts
-    for f in (lambda q: (lambda c: c[0] >= x0, lambda a, b: ix(a, b, x0)), lambda q: (lambda c: c[0] <= x1, lambda a, b: ix(a, b, x1)),
-              lambda q: (lambda c: c[1] >= y0, lambda a, b: iy(a, b, y0)), lambda q: (lambda c: c[1] <= y1, lambda a, b: iy(a, b, y1))):
+    for ins, inter in ((lambda c: c[0] >= x0, lambda a, b: ix(a, b, x0)), (lambda c: c[0] <= x1, lambda a, b: ix(a, b, x1)),
+                       (lambda c: c[1] >= y0, lambda a, b: iy(a, b, y0)), (lambda c: c[1] <= y1, lambda a, b: iy(a, b, y1))):
         if not p: break
-        ins, inter = f(None); p = clip(p, ins, inter)
+        p = clip(p, ins, inter)
     return dedup(p)
 
 
@@ -120,50 +111,103 @@ class Tiles:
         self.count = defaultdict(int)
 
     def road(self, tags, pts):
-        hw = tags.get("highway")
-        fl = ""
-        if tags.get("bridge", "no") != "no": fl += "b"
-        if tags.get("tunnel", "no") != "no": fl += "t"
-        if tags.get("indoor", "no") != "no": fl += "i"
-        if tags.get("access") in ("private", "no", "customers", "delivery", "agricultural", "forestry"): fl += "a"
-        if tags.get("covered", "no") != "no": fl += "c"
-        if tags.get("foot") == "no": fl += "f"
-        if tags.get("foot") in ("yes", "designated", "permissive"): fl += "F"
-        nm = tags.get("ref") or tags.get("name") or ""
-        svc = tags.get("footway") if hw == "footway" else (tags.get("service") or "")
-        pts = simplify(dedup(pts), 0.6)
-        for (tx, ty), rl in line_runs(pts).items():
-            for r in rl: self.t[(tx, ty)]["w"].append([hw, nm, fl, svc or "", enc(r, tx, ty)])
+        hw = tags.get("highway"); fl = 0
+        if tags.get("ref") or tags.get("name"): fl |= 1
+        if tags.get("bridge", "no") != "no": fl |= 2
+        if tags.get("tunnel", "no") != "no": fl |= 4
+        if tags.get("indoor", "no") != "no": fl |= 8
+        if tags.get("access") in ("private", "no", "customers", "delivery", "agricultural", "forestry"): fl |= 16
+        if tags.get("covered", "no") != "no": fl |= 32
+        if tags.get("foot") == "no": fl |= 64
+        if tags.get("foot") in ("yes", "designated", "permissive"): fl |= 128
+        sv = tags.get("footway") if hw == "footway" else tags.get("service")
+        svc = SVC.index(sv) if sv in SVC else (6 if sv else 0)
+        pts = simplify(dedup(pts), 0.5)
+        for key, rl in line_runs(pts).items():
+            for r in rl: self.t[key]["w"].append((HWI[hw], fl, svc, r))
         self.count["w"] += 1
 
     def waterway(self, kind, pts):
-        pts = simplify(dedup(pts), 1.2)
-        for (tx, ty), rl in line_runs(pts).items():
-            for r in rl: self.t[(tx, ty)]["r"].append([kind, enc(r, tx, ty)])
+        pts = simplify(dedup(pts), 0.8)
+        for key, rl in line_runs(pts).items():
+            for r in rl: self.t[key]["r"].append((RI[kind], r))
         self.count["r"] += 1
 
     def building(self, pts):
-        pts = simplify(dedup(pts), 0.8)
+        pts = dedup(pts)
         if len(pts) < 4: return
         cx = sum(p[0] for p in pts) // len(pts); cy = sum(p[1] for p in pts) // len(pts)
-        tx, ty = cx // E, cy // E
-        self.t[(tx, ty)]["b"].append(enc(pts[:-1], tx, ty))   # bez opakovaného posledního bodu
+        self.t[(cx // E, cy // E)]["b"].append(pts[:-1])
         self.count["b"] += 1
 
     def water(self, kind, pts):
-        pts = simplify(dedup(pts), 1.5)
+        pts = simplify(dedup(pts), 1.0)
         if len(pts) < 4: return
         xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
         for tx in range(min(xs) // E, max(xs) // E + 1):
             for ty in range(min(ys) // E, max(ys) // E + 1):
-                c = clip_poly(pts[:-1], tx * E - 8, ty * E - 8, (tx + 1) * E + 8, (ty + 1) * E + 8)
-                if len(c) >= 3: self.t[(tx, ty)]["a"].append([kind, enc(c, tx, ty)])
+                c = clip_poly(pts[:-1], tx * E - 4, ty * E - 4, (tx + 1) * E + 4, (ty + 1) * E + 4)
+                if len(c) >= 3: self.t[(tx, ty)]["a"].append((WI.get(kind, 0), c))
         self.count["a"] += 1
 
     def poi(self, kind, lon, lat):
-        x, y = gxy(lon, lat); tx, ty = x // E, y // E
-        self.t[(tx, ty)]["p"].append([kind, x - tx * E, y - ty * E])
+        x, y = gxy(lon, lat)
+        self.t[(x // E, y // E)]["p"].append((PI[kind], x, y))
         self.count["p"] += 1
+
+
+def blocks(polys, unit_m2):
+    """sousední domy do bloků: rozšířit o 0,4 bodu, sloučit, zase zúžit, zjednodušit; kůlny pod 12 m² pryč"""
+    ps = []
+    for pts in polys:
+        if len(pts) < 3: continue
+        try:
+            g = Polygon(pts)
+            if not g.is_valid: g = g.buffer(0)
+            if g.area * unit_m2 < 12: continue
+            ps.append(g.buffer(0.4, join_style=2))
+        except Exception:
+            continue
+    if not ps: return []
+    u = unary_union(ps).buffer(-0.4, join_style=2).simplify(0.5)
+    out = []
+    for g in getattr(u, "geoms", [u]):
+        if g.is_empty or g.geom_type != "Polygon": continue
+        ring = dedup([(int(round(x)), int(round(y))) for x, y in list(g.exterior.coords)[:-1]])
+        if len(ring) >= 3: out.append(ring)
+    return out
+
+
+def vi(n, out):
+    while True:
+        b = n & 127; n >>= 7
+        if n: out.append(b | 128)
+        else: out.append(b); return
+
+
+def pts_enc(pts, ox, oy, out):
+    vi(len(pts), out); px, py = ox, oy
+    for x, y in pts:
+        dx, dy = x - px, y - py
+        vi((dx << 1) ^ (dx >> 63), out); vi((dy << 1) ^ (dy >> 63), out)
+        px, py = x, y
+
+
+def tile_bytes(tx, ty, d, unit_m2):
+    out = bytearray(b"LD1"); vi(Z, out); vi(tx, out); vi(ty, out); vi(E, out)
+    ox, oy = tx * E, ty * E
+    vi(len(d["w"]), out)
+    for hw, fl, svc, r in d["w"]: out.append(hw); out.append(fl); out.append(svc); pts_enc(r, ox, oy, out)
+    bl = blocks(d["b"], unit_m2); d["b"] = None
+    vi(len(bl), out)
+    for r in bl: pts_enc(r, ox, oy, out)
+    vi(len(d["a"]), out)
+    for k, r in d["a"]: out.append(k); pts_enc(r, ox, oy, out)
+    vi(len(d["r"]), out)
+    for k, r in d["r"]: out.append(k); pts_enc(r, ox, oy, out)
+    vi(len(d["p"]), out)
+    for k, x, y in d["p"]: out.append(k); vi(x - ox, out); vi(y - oy, out)
+    return bytes(out)
 
 
 def main(src):
@@ -172,7 +216,7 @@ def main(src):
     fp = osmium.FileProcessor(src).with_locations("flex_mem").with_areas().with_filter(osmium.filter.KeyFilter(*keys))
     for o in fp:
         seen += 1
-        if seen % 500000 == 0: print(seen, "objektů", int(time.time() - t0), "s", dict(T.count), flush=True)
+        if seen % 2000000 == 0: print(seen, "objektů", int(time.time() - t0), "s", dict(T.count), flush=True)
         tags = o.tags
         try:
             if o.is_node():
@@ -180,9 +224,9 @@ def main(src):
                     if tags.get(k) == v: T.poi(kind, o.location.lon, o.location.lat); break
             elif o.is_way():
                 hw = tags.get("highway")
-                if hw in ROAD and tags.get("area") != "yes":
+                if hw in HWI and tags.get("area") != "yes":
                     T.road(tags, [gxy(n.lon, n.lat) for n in o.nodes])
-                elif tags.get("waterway") in WATERWAY and tags.get("tunnel", "no") == "no":
+                elif tags.get("waterway") in RI and tags.get("tunnel", "no") == "no":
                     T.waterway(tags.get("waterway"), [gxy(n.lon, n.lat) for n in o.nodes])
                 if tags.get("leisure") == "playground" and len(o.nodes) > 2:
                     n0 = o.nodes[0]; T.poi("playground", n0.lon, n0.lat)
@@ -196,19 +240,21 @@ def main(src):
                     else: T.water(tags.get("water") or tags.get("natural") or tags.get("landuse") or "water", pts)
         except osmium.InvalidLocationError:
             continue
-    print("zpracováno", seen, "objektů za", int(time.time() - t0), "s", dict(T.count), flush=True)
-    total = 0
-    for (tx, ty), d in T.t.items():
+    print("načteno", seen, "objektů za", int(time.time() - t0), "s", dict(T.count), flush=True)
+    total = 0; k = 0
+    for (tx, ty) in list(T.t.keys()):
+        d = T.t.pop((tx, ty))
+        lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (ty + 0.5) / N))))
+        m = 40075016.686 * math.cos(math.radians(lat)) / (N * E)   # metrů na bod
+        data = gzip.compress(tile_bytes(tx, ty, d, m * m), 9, mtime=0)
         os.makedirs(os.path.join(OUT, str(tx)), exist_ok=True)
-        body = {"z": Z, "x": tx, "y": ty, "e": E}
-        body.update({k: v for k, v in d.items() if v})
-        s = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
-        with open(os.path.join(OUT, str(tx), "%d.json" % ty), "w") as fh: fh.write(s)
-        total += len(s.encode())
+        with open(os.path.join(OUT, str(tx), "%d.bin" % ty), "wb") as fh: fh.write(data)
+        total += len(data); k += 1
+        if k % 5000 == 0: print("zapsáno", k, "dlaždic,", round(total / 1e6, 1), "MB", int(time.time() - t0), "s", flush=True)
     with open(os.path.join(OUT, "..", "info.json"), "w") as fh:
-        json.dump({"z": Z, "e": E, "dlazdic": len(T.t), "velikost_mb": round(total / 1e6, 1), "zdroj": os.path.basename(src),
+        json.dump({"z": Z, "e": E, "format": "LD1 gzip", "dlazdic": k, "velikost_mb": round(total / 1e6, 1), "zdroj": os.path.basename(src),
                    "zpracovano": time.strftime("%Y-%m-%d"), "licence": "© OpenStreetMap contributors (ODbL)"}, fh, ensure_ascii=False)
-    print("hotovo:", len(T.t), "dlaždic,", round(total / 1e6, 1), "MB", flush=True)
+    print("hotovo:", k, "dlaždic,", round(total / 1e6, 1), "MB", int(time.time() - t0), "s", flush=True)
 
 
 if __name__ == "__main__":
