@@ -154,6 +154,9 @@
   /* světlá mapa OSM -> negativ, bez barev, do zeleného fosforu */
   .radar .map { filter: invert(1) grayscale(1) sepia(.5) hue-rotate(95deg) brightness(1.15) contrast(1.35); }
   .radar.mapon .map { opacity: .72; }
+  /* přebarvené dlaždice už mají vlastní barvy: bez filtru a sytěji */
+  .radar .map.recolor { filter: none; }
+  .radar.mapon .map.recolor { opacity: .85; }
   .radar .attr { position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); z-index: 4; font: 400 7px/1 var(--mono); letter-spacing: .04em; color: rgba(var(--ghost-rgb), .4); white-space: nowrap; pointer-events: none; }
   .radar .attr a { color: inherit; text-decoration: none; }
 
@@ -1394,10 +1397,36 @@
     var k = z + "/" + x + "/" + y;
     if (tiles[k]) return tiles[k];
     var im = new Image(); im.decoding = "async";
-    im.onload = function () { im.ok = true; mapDirty = true; };
+    im.onload = function () { im.cv = recolorTile(im); im.ok = true; mapDirty = true; };
+    im.crossOrigin = "anonymous";
     im.referrerPolicy = "strict-origin-when-cross-origin";
     im.src = TILE.replace("{z}", z).replace("{x}", x).replace("{y}", y);
     tiles[k] = im; return im;
+  }
+  /* Přebarvení dlaždice podle barev mapy OSM: silnice světlý fosfor, hlavní silnice teplejší, domy tmavé hnědé bloky,
+     zeleň tmavě zelená, voda tmavě modrozelená, podklad skoro černý. Když prohlížeč nedovolí číst pixely, zůstane starý filtr. */
+  function recolorTile(im) {
+    try {
+      var cv = document.createElement("canvas"); cv.width = 256; cv.height = 256;
+      var c = cv.getContext("2d"); c.drawImage(im, 0, 0, 256, 256);
+      var id = c.getImageData(0, 0, 256, 256), d = id.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b), L = 0.3 * r + 0.59 * g + 0.11 * b, sat = mx - mn, o;
+        if (r >= 250 && g >= 250 && b >= 250) o = [104, 150, 130];                                  /* ulice a cesty (bílé) */
+        else if (L > 170 && sat > 40 && r > b + 30 && !(g > r)) o = [150, 132, 92];                /* hlavní silnice (žluté, oranžové, růžové) */
+        else if (Math.abs(r - 242) < 7 && Math.abs(g - 239) < 7 && Math.abs(b - 233) < 8) o = [7, 11, 9];   /* podklad */
+        else if (r >= 186 && r <= 228 && g >= 172 && g <= 218 && b >= 160 && b <= 212 && r >= b + 4 && sat < 34) o = [56, 44, 32];  /* domy */
+        else if (g > r + 6 && g >= b) o = [20, 46, 30];                                             /* zeleň */
+        else if (b > r + 12 && b >= g - 4) o = [16, 44, 54];                                        /* voda */
+        else if (L < 140) o = [96, 108, 102];                                                       /* popisky, značky */
+        else if (sat < 20 && L > 200) o = [36, 40, 37];                                             /* šedé plochy */
+        else o = [24, 30, 26];
+        d[i] = o[0]; d[i + 1] = o[1]; d[i + 2] = o[2];
+      }
+      c.putImageData(id, 0, 0);
+      mapCv.classList.add("recolor");
+      return cv;
+    } catch (e) { return null; }
   }
   function drawMap(hdeg) {
     var show = pos && (state === "pick" || state === "play" || state === "boot");
@@ -1418,7 +1447,7 @@
     for (var tx = x0; tx <= x1; tx++) for (var ty = y0; ty <= y1; ty++) {
       if (ty < 0 || ty >= (1 << z)) continue;
       var im = tileImg(z, tx, ty);
-      if (im.ok) c.drawImage(im, tx * 256 - gx, ty * 256 - gy, 256.6, 256.6);
+      if (im.ok) c.drawImage(im.cv || im, tx * 256 - gx, ty * 256 - gy, 256.6, 256.6);
     }
   }
 
