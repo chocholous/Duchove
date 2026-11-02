@@ -1339,10 +1339,10 @@
       c.setTransform(1, 0, 0, 1, W / 2, H / 2); c.rotate(-rad(hdeg)); c.scale(f, f); c.translate(T.tx * T.E - g.x, T.ty * T.E - g.y);
       c.fillStyle = "rgb(16,46,58)"; c.fill(P.water);
       c.strokeStyle = "rgb(28,74,90)"; c.lineWidth = u(9); c.stroke(P.river); c.lineWidth = u(2.5); c.stroke(P.stream);
-      c.fillStyle = "rgb(58,46,33)"; c.fill(P.bld); c.strokeStyle = "rgb(92,74,52)"; c.lineWidth = u(0.6); c.stroke(P.bld);
-      c.strokeStyle = "rgb(96,140,121)"; c.lineWidth = u(1.8); c.setLineDash([u(3), u(2)]); c.stroke(P.foot); c.setLineDash([]);
-      c.strokeStyle = "rgb(112,160,138)"; c.lineWidth = u(6); c.stroke(P.minor);
-      c.strokeStyle = "rgb(160,140,96)"; c.lineWidth = u(10); c.stroke(P.major);
+      c.fillStyle = "rgb(48,38,28)"; c.fill(P.bld); c.strokeStyle = "rgb(84,67,47)"; c.lineWidth = u(0.5); c.stroke(P.bld);
+      c.strokeStyle = "rgb(84,124,107)"; c.lineWidth = u(1.1); c.setLineDash([u(2.4), u(2)]); c.stroke(P.foot); c.setLineDash([]);
+      c.strokeStyle = "rgb(86,128,110)"; c.lineWidth = u(3.8); c.stroke(P.minor);
+      c.strokeStyle = "rgb(132,116,82)"; c.lineWidth = u(6.5); c.stroke(P.major);
     });
     mapCv.classList.add("recolor");
     return true;
@@ -1483,7 +1483,7 @@
   var TILE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png", tiles = {}, mapDirty = true, mapAt = 0, mapKey = "";
   var mapCv = document.createElement("canvas"); mapCv.className = "map"; mapCv.setAttribute("aria-hidden", "true");
   radar.insertBefore(mapCv, radar.firstChild);
-  var attr = document.createElement("div"); attr.className = "attr"; attr.textContent = "© OpenStreetMap · OpenMapTiles"; radar.appendChild(attr);
+  var attr = document.createElement("div"); attr.className = "attr"; attr.textContent = "© OpenStreetMap"; radar.appendChild(attr);
   function tileImg(z, x, y) {
     var n = 1 << z; x = ((x % n) + n) % n;
     var k = z + "/" + x + "/" + y;
@@ -1590,7 +1590,7 @@
     var q = "[out:json][timeout:8];(node(around:25," + g.lat.toFixed(6) + "," + g.lon.toFixed(6) + ")[~\"^(natural|amenity|highway|leisure|emergency|tourism|barrier)$\"~\"^(tree|bench|street_lamp|playground|picnic_table|waste_basket|post_box|fire_hydrant|drinking_water|bicycle_parking|shelter|information|gate|fountain)$\"];way(around:25," + g.lat.toFixed(6) + "," + g.lon.toFixed(6) + ")[leisure=playground];);out center tags;";
     var k = 0;
     /* nejdřív body z vlastních dat ČR; Overpass jen tam, kde data nejsou */
-    czPois(g, 25).then(function (list) {
+    czPois(g, 35).then(function (list) {
       var best = null;
       list.forEach(function (q) { if (!CLUE_OSM[q.kind]) return; var dd = q.d + (q.kind === "tree" ? 6 : 0); if (!best || dd < best.d) best = { d: dd, kind: q.kind }; });
       if (best) clues[i] = CLUE_OSM[best.kind];
