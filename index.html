@@ -1007,7 +1007,7 @@
   var origin = null, ghosts = [], startedAt = 0, finishedAt = 0, target = null, spawnedAt = 0, startD = 0, hereUntil = 0;
   var heading = null, headingAt = 0, absSeen = false, listening = false, gpsHeading = null, gpsHeadAt = 0;
   /* rychlost chůze (z GPS), poslední zatřesení telefonem, body na cestách pro útěk plachého, rozběhnutý rituál */
-  var speed = 0, prevPos = null, prevT = 0, lastMoveAt = 0, motionSeen = false, testSpeed = 0, testSpeedUntil = 0, pathPts = [], ritual = null;
+  var fixHist = [], speed = 0, prevPos = null, prevT = 0, lastMoveAt = 0, motionSeen = false, testSpeed = 0, testSpeedUntil = 0, pathPts = [], ritual = null;
 
   var intro = $("#intro"), msg = $("#msg"), beginBtn = $("#begin"), resumeBtn = $("#resume"), testBtn = $("#testbtn");
   var revealEl = $("#reveal"), stageEl = $("#stage"), scoreEl = $("#score"), rnext = $("#rnext"), candlesEl = $("#candles");
@@ -1609,7 +1609,13 @@
     /* rychlost: z GPS, jinak z posunu (posun menší než nepřesnost se nepočítá, ať plaché neutíká kvůli šumu) */
     var tNow = performance.now(), v = null;
     if (typeof p.coords.speed === "number" && !isNaN(p.coords.speed)) v = p.coords.speed;
-    else if (prevPos && tNow - prevT > 300) v = Math.max(0, dist(prevPos, pos) - acc * 0.5) / ((tNow - prevT) / 1000);
+    else {
+      /* posun za poslední ~4 s: šum GPS se tak neprojeví a obyčejná chůze se pozná i bez rychlosti z telefonu */
+      fixHist.push({ p: pos, t: tNow }); while (fixHist.length > 2 && tNow - fixHist[1].t > 4000) fixHist.shift();
+      var f0 = fixHist[0], dtS = (tNow - f0.t) / 1000;
+      if (dtS > 1.5) v = Math.max(0, dist(f0.p, pos) - acc * 0.5) / dtS;
+      else if (prevPos && tNow - prevT > 300) v = Math.max(0, dist(prevPos, pos) - acc * 0.5) / ((tNow - prevT) / 1000);
+    }
     if (v !== null) speed = speed * 0.5 + v * 0.5;
     prevPos = pos; prevT = tNow;
     if (typeof p.coords.heading === "number" && !isNaN(p.coords.heading) && (p.coords.speed || 0) > 0.8) { gpsHeading = p.coords.heading; gpsHeadAt = performance.now(); }
@@ -2834,6 +2840,10 @@
       if (d < 25 && sp > 2 && Date.now() - (g.fleeAt || 0) > 6000 && (g.flees || 0) < 3) flee(g);
     } else if (g.t === "zvedavec") {
       if (d < 35 && d > 2.5 && sp < 0.7) { var q = offset(g, 0.8 * dt, bearing(g, pos)); g.lat = q.lat; g.lon = q.lon; }
+      /* hráč se musí zastavit: dokud jde, zvědavec před ním couvá (drží si odstup 14 m) a nedá se chytit */
+      else if (d < 14 && sp >= 0.7) { var q2 = offset(g, Math.min(2.6 * dt, 14 - d), bearing(pos, g)); g.lat = q2.lat; g.lon = q2.lon; g.backing = performance.now(); }
+      /* poloha zvědavce se průběžně ukládá (pokračování v rozehrané hře) */
+      if (performance.now() - (g.savedAt || 0) > 1500) { g.savedAt = performance.now(); save(); }
       /* těsně předtím, než k hráči dorazí: lekačka */
       if (!g.scared && d <= 5) jumpScare(g, "Je u tebe! Neboj se, teď ho chytíš.");
     } else if (g.t === "schovavac") {
@@ -3055,8 +3065,11 @@
       if (mode === "walk" && best.g.t && TYPE_TEXT[best.g.t][band]) bt = TYPE_TEXT[best.g.t][band];
       if (mode === "car" && best.g.place) bt = carPlaceText(best.g.place, band) || bt;
       var fast = band === "here" && tooFastFor(best.g);
+      /* zvědavec: když hráč jde, jen „Zastav se!“ */
+      var walking = mode === "walk" && best.g.t === "zvedavec" && curSpeed() >= 0.7 && (band === "strong" || band === "close" || band === "here");
+      if (walking) bt = ["Zastav se!", "Zastav se! Nehýbej se."];
       if (fast) bt = ["Zpomal.", "Je tady, ale zpomal. Nesmí se splašit."];
-      var bkey = band + (fast ? "!" : "");
+      var bkey = band + (fast ? "!" : "") + (walking ? "w" : "");
       /* auto: strašidlo, které jsme minuli, uteče a detektor chytí jiné */
       /* auto: když jsme strašidlo minuli nebo odbočili (vzdálenost roste o 350 m od nejbližšího místa), uteče a detektor chytí jiné před námi */
       if (mode === "car") minD = Math.min(minD, d);
@@ -3069,8 +3082,8 @@
       }
       stateEl.textContent = bt[0]; stateEl.className = "state" + (band === "here" || band === "close" ? " alert" : band === "strong" ? " warn" : "");
       if (bkey !== lastBand && $("#scare").hidden) { lastBand = bkey; sayEl.textContent = bt[1]; speak(bt[1], band === "here"); }
-      catchBtn.disabled = band !== "here" || fast;
-      var nw = nowFor(band, best.g, fast); setNow(nw[0], nw[1], nw[2]);
+      catchBtn.disabled = band !== "here" || fast || walking;
+      var nw = walking ? ["front_hand", "Zastav se! Stůj a nehýbej se.", true] : nowFor(band, best.g, fast); setNow(nw[0], nw[1], nw[2]);
       var far = origin ? dist(pos, origin) : 0;
       hintEl.textContent = "±" + Math.round(acc) + " m · " + hd.src + (hd.h === null ? " · nahoře je sever" : "") + (mode === "walk" && far > 120 ? " · jsi daleko od startu, vrať se" : "");
     } else if (state === "pick") {
