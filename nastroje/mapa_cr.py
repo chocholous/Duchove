@@ -202,7 +202,7 @@ def pts_enc(pts, ox, oy, out):
 def tile_bytes(tx, ty, d, unit_m2):
     out = bytearray(b"LD1"); vi(Z, out); vi(tx, out); vi(ty, out); vi(E, out)
     ox, oy = tx * E, ty * E
-    names = sorted({w[3] for w in d["w"] if w[3]}); ni = {n: i + 1 for i, n in enumerate(names)}
+    names = sorted({w[2] for w in d["w"] if w[2]}); ni = {n: i + 1 for i, n in enumerate(names)}
     vi(len(names), out)
     for n in names: b = n.encode("utf-8"); vi(len(b), out); out += b
     vi(len(d["w"]), out)
@@ -217,6 +217,19 @@ def tile_bytes(tx, ty, d, unit_m2):
     vi(len(d["p"]), out)
     for k, x, y in d["p"]: out.append(k); vi(x - ox, out); vi(y - oy, out)
     return bytes(out)
+
+
+TT = None
+
+
+def write_tile(key):
+    tx, ty = key; d = TT[key]
+    lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (ty + 0.5) / N))))
+    m = 40075016.686 * math.cos(math.radians(lat)) / (N * E)   # metrů na bod
+    data = zgz.compress(tile_bytes(tx, ty, d, m * m), numiterations=8)
+    os.makedirs(os.path.join(OUT, str(tx)), exist_ok=True)
+    with open(os.path.join(OUT, str(tx), "%d.bin" % ty), "wb") as fh: fh.write(data)
+    return len(data)
 
 
 def main(src):
@@ -250,16 +263,12 @@ def main(src):
         except osmium.InvalidLocationError:
             continue
     print("načteno", seen, "objektů za", int(time.time() - t0), "s", dict(T.count), flush=True)
-    total = 0; k = 0
-    for (tx, ty) in list(T.t.keys()):
-        d = T.t.pop((tx, ty))
-        lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (ty + 0.5) / N))))
-        m = 40075016.686 * math.cos(math.radians(lat)) / (N * E)   # metrů na bod
-        data = zgz.compress(tile_bytes(tx, ty, d, m * m), numiterations=8)
-        os.makedirs(os.path.join(OUT, str(tx)), exist_ok=True)
-        with open(os.path.join(OUT, str(tx), "%d.bin" % ty), "wb") as fh: fh.write(data)
-        total += len(data); k += 1
-        if k % 5000 == 0: print("zapsáno", k, "dlaždic,", round(total / 1e6, 1), "MB", int(time.time() - t0), "s", flush=True)
+    global TT; TT = T.t; keys = list(T.t.keys()); total = 0; k = 0
+    import multiprocessing as mp
+    with mp.get_context("fork").Pool(os.cpu_count()) as pool:
+        for n in pool.imap_unordered(write_tile, keys, chunksize=16):
+            total += n; k += 1
+            if k % 5000 == 0: print("zapsáno", k, "dlaždic,", round(total / 1e6, 1), "MB", int(time.time() - t0), "s", flush=True)
     with open(os.path.join(OUT, "..", "info.json"), "w") as fh:
         json.dump({"z": Z, "e": E, "format": "LD1 gzip (zopfli)", "dlazdic": k, "velikost_mb": round(total / 1e6, 1), "zdroj": os.path.basename(src),
                    "zpracovano": time.strftime("%Y-%m-%d"), "licence": "© OpenStreetMap contributors (ODbL)"}, fh, ensure_ascii=False)
