@@ -463,6 +463,9 @@
   .dot.tgt.hid { opacity: .22 !important; }
   /* Lekačka schovávače: záblesk, oči přes celou obrazovku, třes */
   .scare { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; overflow: hidden; background: #000; animation: scareBg 1.8s steps(1) forwards; }
+  /* tmavý duch (Stínový muž, Klekánice) na černé není vidět: za ním mlžná šedozelená tma */
+  .scare.darkghost { background: radial-gradient(ellipse at 50% 45%, #6d7a72 0, #33403a 45%, #0c110f 100%) !important; animation: none; }
+  .scare.darkghost .sghost { filter: contrast(1.25); }
   .scare .sghost { height: min(96vh, 900px); width: auto; max-width: none; opacity: 1; animation: scareIn .25s cubic-bezier(.2, 2, .4, 1) both, scareShake .08s linear .25s 14; filter: brightness(1.35) contrast(1.15); }
   .scare .eyes { width: min(150vw, 900px); opacity: 1; animation: scareIn .25s cubic-bezier(.2, 2, .4, 1) both, scareShake .08s linear .25s 14; }
   @keyframes scareBg { 0% { background: #f4efe4; } 7% { background: #000; } 14% { background: #3a0905; } 22% { background: #000; } 100% { background: #000; } }
@@ -2858,7 +2861,7 @@
     if (!scareOn) { line = "Tady se něco schovávalo. Teď ho máš."; sayEl.textContent = line; speak(line, true); return; }
     /* lekačka: místo očí záblesk ducha přes celou obrazovku (rozmazaná bitmapa) */
     var gi = ghosts.indexOf(g), lk = gi >= 0 ? lookOf(gi) : "klekanice";
-    var el = $("#scare"); el.innerHTML = '<img class="sghost" alt="" src="duchove/' + lk + '.png">'; el.hidden = false;
+    var el = $("#scare"); el.innerHTML = '<img class="sghost" alt="" src="duchove/' + lk + '.png">'; el.classList.toggle("darkghost", !!DARK_LOOKS[lk]); el.hidden = false;
     hush(); scream(); vibe([300, 60, 300, 60, 500]);
     clearTimeout(scareT);
     scareT = setTimeout(function () { el.hidden = true; el.innerHTML = ""; if (state === "play") { sayEl.textContent = line; speak(line, true); } }, 1800);
