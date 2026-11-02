@@ -28,6 +28,7 @@ Data: © OpenStreetMap contributors (ODbL).
 """
 import gzip, json, math, os, sys, time
 import zopfli.gzip as zgz
+import pickle, gc
 from collections import defaultdict
 import osmium
 from shapely.geometry import Polygon
@@ -232,8 +233,8 @@ def write_tile(key):
     return len(data)
 
 
-def main(src):
-    T = Tiles(); t0 = time.time(); seen = 0
+def read(src, t0):
+    T = Tiles(); seen = 0
     keys = ("highway", "building", "waterway", "natural", "landuse", "water", "amenity", "leisure", "emergency", "tourism", "barrier", "historic")
     fp = osmium.FileProcessor(src).with_locations("flex_mem").with_areas().with_filter(osmium.filter.KeyFilter(*keys))
     for o in fp:
@@ -263,12 +264,41 @@ def main(src):
         except osmium.InvalidLocationError:
             continue
     print("načteno", seen, "objektů za", int(time.time() - t0), "s", dict(T.count), flush=True)
-    global TT; TT = T.t; keys = list(T.t.keys()); total = 0; k = 0
+    return T
+
+
+SHARDS = 64
+
+
+def write_shard(path):
+    global TT
+    if TT is None: TT = {}
+    with open(path, "rb") as fh: part = pickle.load(fh)
+    total = 0
+    for key in list(part):
+        TT[key] = part.pop(key); total += write_tile(key); del TT[key]
+    return total, path
+
+
+def main(src):
+    t0 = time.time()
+    sd = os.environ.get("MAPA_SHARDS") or os.path.join(OUT, "..", "_shards")
+    if not os.path.exists(os.path.join(sd, "hotovo")):
+        T = read(src, t0); os.makedirs(sd, exist_ok=True)
+        keys = list(T.t.keys())
+        for i in range(SHARDS):
+            with open(os.path.join(sd, "%02d.pkl" % i), "wb") as fh:
+                pickle.dump({k: T.t.pop(k) for k in keys[i::SHARDS]}, fh, protocol=5)
+        del T, keys; gc.collect(); open(os.path.join(sd, "hotovo"), "w").close()
+        print("uloženo do", sd, int(time.time() - t0), "s", flush=True)
+    global TT; TT = {}; total = 0; k = 0
+    paths = sorted(os.path.join(sd, f) for f in os.listdir(sd) if f.endswith(".pkl"))
     import multiprocessing as mp
-    with mp.get_context("fork").Pool(os.cpu_count()) as pool:
-        for n in pool.imap_unordered(write_tile, keys, chunksize=16):
+    with mp.get_context("spawn").Pool(os.cpu_count(), maxtasksperchild=4) as pool:
+        for n, p in pool.imap_unordered(write_shard, paths):
             total += n; k += 1
-            if k % 5000 == 0: print("zapsáno", k, "dlaždic,", round(total / 1e6, 1), "MB", int(time.time() - t0), "s", flush=True)
+            print("část", k, "/", len(paths), round(total / 1e6, 1), "MB", int(time.time() - t0), "s", flush=True)
+    k = sum(len(fs) for _, _, fs in os.walk(OUT))
     with open(os.path.join(OUT, "..", "info.json"), "w") as fh:
         json.dump({"z": Z, "e": E, "format": "LD1 gzip (zopfli)", "dlazdic": k, "velikost_mb": round(total / 1e6, 1), "zdroj": os.path.basename(src),
                    "zpracovano": time.strftime("%Y-%m-%d"), "licence": "© OpenStreetMap contributors (ODbL)"}, fh, ensure_ascii=False)
