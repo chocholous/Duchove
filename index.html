@@ -1251,12 +1251,10 @@
   /* číselníky: musí sedět s nastroje/mapa_cr.py */
   var CZ_HW = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street", "service",
     "pedestrian", "track", "footway", "path", "cycleway", "bridleway", "steps", "road", "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"];
-  var CZ_SVC = ["", "crossing", "sidewalk", "driveway", "parking_aisle", "alley", "other"];
-  var CZ_WATER = ["water", "reservoir", "basin", "pond", "lake", "river", "oxbow", "canal", "fishpond", "riverbank"];
-  var CZ_RIVER = ["river", "stream", "canal", "brook", "ditch", "drain"];
+  var CZ_RIVER = ["river", "stream"]; /* 0 řeka nebo kanál, 1 potok */
   var CZ_POI = ["bench", "street_lamp", "playground", "picnic_table", "waste_basket", "post_box", "fire_hydrant", "drinking_water",
     "bicycle_parking", "shelter", "information", "gate", "fountain", "tree", "cross", "shrine", "church"];
-  var CZ_FL = [[1, ""], [2, "b"], [4, "t"], [8, "i"], [16, "a"], [32, "c"], [64, "f"], [128, "F"]];
+  var CZ_FL = [[1, ""], [2, "b"], [4, "t"], [8, "i"], [16, "a"], [32, "c"], [64, "f"], [128, "F"]]; /* 256 = přechod */
   function czG(lat, lon) {
     var s = Math.sin(rad(clamp(lat, -85, 85)));
     return { x: (lon + 180) / 360 * CZ_N * CZ_E, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * CZ_N * CZ_E };
@@ -1275,12 +1273,12 @@
     v(); var tx = v(), ty = v(), E = v(), T = { tx: tx, ty: ty, E: E, w: [], b: [], a: [], r: [], p: [] }, n, i, names = [""], td = new TextDecoder();
     for (n = v(), i = 0; i < n; i++) { var L = v(); names.push(td.decode(u.subarray(p, p + L))); p += L; }
     for (n = v(), i = 0; i < n; i++) {
-      var hw = CZ_HW[u[p++]], f = u[p++], sv = CZ_SVC[u[p++]] || "", nm = names[v()] || "", fl = "";
+      var hw = CZ_HW[u[p++]], f = v(), sv = f & 256 ? "crossing" : "", nm = names[v()] || "", fl = "";
       CZ_FL.forEach(function (q) { if (f & q[0]) fl += q[1]; });
       T.w.push({ hw: hw, nm: nm || (f & 1 ? "1" : ""), name: nm, fl: fl, svc: sv, c: pts() });
     }
     for (n = v(), i = 0; i < n; i++) T.b.push(pts());
-    for (n = v(), i = 0; i < n; i++) { var ka = CZ_WATER[u[p++]] || "water"; T.a.push({ k: ka, c: pts() }); }
+    for (n = v(), i = 0; i < n; i++) T.a.push({ k: "water", c: pts() });
     for (n = v(), i = 0; i < n; i++) { var kr = CZ_RIVER[u[p++]] || "stream"; T.r.push({ k: kr, c: pts() }); }
     for (n = v(), i = 0; i < n; i++) { var kp = CZ_POI[u[p++]]; T.p.push([kp, v(), v()]); }
     return T;

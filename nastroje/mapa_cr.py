@@ -1,16 +1,22 @@
 """Mapa celé ČR přímo v aplikaci: z výřezu OpenStreetMap udělá dlaždice mapa/14/x/y.bin.
 
 Hra si stáhne jen 1–4 dlaždice kolem hráče (asi 2,4 × 2,4 km) z vlastního webu, bez mapových serverů.
-Dlaždice je binární a zkomprimovaná gzipem (hra ji rozbalí sama), souřadnice 0–1023 (asi 2,4 m).
+Dlaždice je binární a zkomprimovaná gzipem přes zopfli (o ~6 % menší, hra ji rozbalí jako běžný gzip),
+souřadnice 0–1023 (asi 2,4 m). V datech je jen to, co hra používá.
+
+Zjednodušení a výběr (změřeno na vzorku dlaždic, viz komentáře u funkcí):
+  cesty 0,5 bodu (1,2 m) · domy do bloků, zjednodušení 0,8 bodu (1,9 m), bez staveb pod 25 m²
+  vodní plochy 2 body (4,7 m), bez druhu · toky 2 body, jen řeky/kanály a potoky (strouhy a stoky ne) · body pro úkoly všechny
 
 Obsah dlaždice (vše čísla varint, souřadnice rozdílově a zigzag):
   hlavička "LD1", z, x, y, rozměr
   jména:   počet, pak každé jméno jako délka + UTF-8
-  cesty:   typ, příznaky, druh chodníku/služby, jméno (0 = žádné, jinak pořadí v tabulce + 1), body   (příznaky: 1 má jméno, 2 most, 4 tunel, 8 uvnitř,
-                                                       16 zákaz vstupu, 32 krytá, 64 pěší zákaz, 128 pěší výslovně smí)
+  cesty:   typ, příznaky (varint), jméno (0 = žádné, jinak pořadí v tabulce + 1), body
+           příznaky: 1 má jméno/číslo, 2 most, 4 tunel, 8 uvnitř, 16 zákaz vstupu, 32 krytá, 64 pěší zákaz,
+                     128 pěší výslovně smí, 256 přechod
   domy:    obrysy bloků (sousední domy sloučené, kůlny pod 12 m² vynechané)
-  voda:    druh, obrys (oříznutý na dlaždici)
-  toky:    druh, body
+  voda:    obrys (oříznutý na dlaždici)
+  toky:    druh (0 řeka nebo kanál, 1 potok), body
   body:    druh, x, y   (lavička, lampa, hřiště, strom, kříž…)
 Číselníky (HW, SVC, WATER, RIVER, POI) musí sedět s index.html.
 
@@ -21,6 +27,7 @@ Spuštění:
 Data: © OpenStreetMap contributors (ODbL).
 """
 import gzip, json, math, os, sys, time
+import zopfli.gzip as zgz
 from collections import defaultdict
 import osmium
 from shapely.geometry import Polygon
@@ -34,9 +41,7 @@ OUT = os.environ.get("MAPA_OUT") or os.path.join(os.path.dirname(os.path.abspath
 HW = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street", "service",
       "pedestrian", "track", "footway", "path", "cycleway", "bridleway", "steps", "road",
       "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"]
-SVC = ["", "crossing", "sidewalk", "driveway", "parking_aisle", "alley", "other"]
-WATER = ["water", "reservoir", "basin", "pond", "lake", "river", "oxbow", "canal", "fishpond", "riverbank"]
-RIVER = ["river", "stream", "canal", "brook", "ditch", "drain"]
+RIVER = {"river": 0, "canal": 0, "stream": 1, "brook": 1}   # strouhy a stoky (ditch, drain) hra nekreslí
 POIK = ["bench", "street_lamp", "playground", "picnic_table", "waste_basket", "post_box", "fire_hydrant", "drinking_water",
         "bicycle_parking", "shelter", "information", "gate", "fountain", "tree", "cross", "shrine", "church"]
 POI = {("amenity", "bench"): "bench", ("highway", "street_lamp"): "street_lamp", ("leisure", "playground"): "playground",
@@ -45,7 +50,7 @@ POI = {("amenity", "bench"): "bench", ("highway", "street_lamp"): "street_lamp",
        ("amenity", "bicycle_parking"): "bicycle_parking", ("amenity", "shelter"): "shelter", ("tourism", "information"): "information",
        ("barrier", "gate"): "gate", ("amenity", "fountain"): "fountain", ("natural", "tree"): "tree",
        ("historic", "wayside_cross"): "cross", ("historic", "wayside_shrine"): "shrine", ("amenity", "place_of_worship"): "church"}
-HWI = {k: i for i, k in enumerate(HW)}; WI = {k: i for i, k in enumerate(WATER)}; RI = {k: i for i, k in enumerate(RIVER)}; PI = {k: i for i, k in enumerate(POIK)}
+HWI = {k: i for i, k in enumerate(HW)}; RI = RIVER; PI = {k: i for i, k in enumerate(POIK)}
 
 
 def gxy(lon, lat):
@@ -121,16 +126,15 @@ class Tiles:
         if tags.get("covered", "no") != "no": fl |= 32
         if tags.get("foot") == "no": fl |= 64
         if tags.get("foot") in ("yes", "designated", "permissive"): fl |= 128
-        sv = tags.get("footway") if hw == "footway" else tags.get("service")
-        svc = SVC.index(sv) if sv in SVC else (6 if sv else 0)
+        if tags.get("footway") == "crossing": fl |= 256   # z druhů chodníku hra používá jen přechod
         name = tags.get("name") or ""
         pts = simplify(dedup(pts), 0.5)
         for key, rl in line_runs(pts).items():
-            for r in rl: self.t[key]["w"].append((HWI[hw], fl, svc, name, r))
+            for r in rl: self.t[key]["w"].append((HWI[hw], fl, name, r))
         self.count["w"] += 1
 
     def waterway(self, kind, pts):
-        pts = simplify(dedup(pts), 0.8)
+        pts = simplify(dedup(pts), 2.0)
         for key, rl in line_runs(pts).items():
             for r in rl: self.t[key]["r"].append((RI[kind], r))
         self.count["r"] += 1
@@ -143,13 +147,13 @@ class Tiles:
         self.count["b"] += 1
 
     def water(self, kind, pts):
-        pts = simplify(dedup(pts), 1.0)
+        pts = simplify(dedup(pts), 2.0)
         if len(pts) < 4: return
         xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
         for tx in range(min(xs) // E, max(xs) // E + 1):
             for ty in range(min(ys) // E, max(ys) // E + 1):
                 c = clip_poly(pts[:-1], tx * E - 4, ty * E - 4, (tx + 1) * E + 4, (ty + 1) * E + 4)
-                if len(c) >= 3: self.t[(tx, ty)]["a"].append((WI.get(kind, 0), c))
+                if len(c) >= 3: self.t[(tx, ty)]["a"].append(c)
         self.count["a"] += 1
 
     def poi(self, kind, lon, lat):
@@ -159,19 +163,19 @@ class Tiles:
 
 
 def blocks(polys, unit_m2):
-    """sousední domy do bloků: rozšířit o 0,4 bodu, sloučit, zase zúžit, zjednodušit; kůlny pod 12 m² pryč"""
+    """sousední domy do bloků: rozšířit o 0,4 bodu, sloučit, zase zúžit, zjednodušit o 0,8 bodu; stavby pod 25 m² pryč"""
     ps = []
     for pts in polys:
         if len(pts) < 3: continue
         try:
             g = Polygon(pts)
             if not g.is_valid: g = g.buffer(0)
-            if g.area * unit_m2 < 12: continue
+            if g.area * unit_m2 < 25: continue
             ps.append(g.buffer(0.4, join_style=2))
         except Exception:
             continue
     if not ps: return []
-    u = unary_union(ps).buffer(-0.4, join_style=2).simplify(0.5)
+    u = unary_union(ps).buffer(-0.4, join_style=2).simplify(0.8)
     out = []
     for g in getattr(u, "geoms", [u]):
         if g.is_empty or g.geom_type != "Polygon": continue
@@ -202,12 +206,12 @@ def tile_bytes(tx, ty, d, unit_m2):
     vi(len(names), out)
     for n in names: b = n.encode("utf-8"); vi(len(b), out); out += b
     vi(len(d["w"]), out)
-    for hw, fl, svc, name, r in d["w"]: out.append(hw); out.append(fl); out.append(svc); vi(ni.get(name, 0), out); pts_enc(r, ox, oy, out)
+    for hw, fl, name, r in d["w"]: out.append(hw); vi(fl, out); vi(ni.get(name, 0), out); pts_enc(r, ox, oy, out)
     bl = blocks(d["b"], unit_m2); d["b"] = None
     vi(len(bl), out)
     for r in bl: pts_enc(r, ox, oy, out)
     vi(len(d["a"]), out)
-    for k, r in d["a"]: out.append(k); pts_enc(r, ox, oy, out)
+    for r in d["a"]: pts_enc(r, ox, oy, out)
     vi(len(d["r"]), out)
     for k, r in d["r"]: out.append(k); pts_enc(r, ox, oy, out)
     vi(len(d["p"]), out)
@@ -251,13 +255,13 @@ def main(src):
         d = T.t.pop((tx, ty))
         lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (ty + 0.5) / N))))
         m = 40075016.686 * math.cos(math.radians(lat)) / (N * E)   # metrů na bod
-        data = gzip.compress(tile_bytes(tx, ty, d, m * m), 9, mtime=0)
+        data = zgz.compress(tile_bytes(tx, ty, d, m * m), numiterations=8)
         os.makedirs(os.path.join(OUT, str(tx)), exist_ok=True)
         with open(os.path.join(OUT, str(tx), "%d.bin" % ty), "wb") as fh: fh.write(data)
         total += len(data); k += 1
         if k % 5000 == 0: print("zapsáno", k, "dlaždic,", round(total / 1e6, 1), "MB", int(time.time() - t0), "s", flush=True)
     with open(os.path.join(OUT, "..", "info.json"), "w") as fh:
-        json.dump({"z": Z, "e": E, "format": "LD1 gzip", "dlazdic": k, "velikost_mb": round(total / 1e6, 1), "zdroj": os.path.basename(src),
+        json.dump({"z": Z, "e": E, "format": "LD1 gzip (zopfli)", "dlazdic": k, "velikost_mb": round(total / 1e6, 1), "zdroj": os.path.basename(src),
                    "zpracovano": time.strftime("%Y-%m-%d"), "licence": "© OpenStreetMap contributors (ODbL)"}, fh, ensure_ascii=False)
     print("hotovo:", k, "dlaždic,", round(total / 1e6, 1), "MB", int(time.time() - t0), "s", flush=True)
 
