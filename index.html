@@ -1244,9 +1244,10 @@
       });
   }
   /* ---------- Mapa celé ČR přímo v aplikaci ----------
-     mapa/14/x/y.bin (nastroje/mapa_cr.py): cesty, domy (bloky), voda, řeky a body pro úkoly, dlaždice asi 2,4 × 2,4 km,
-     binární a zkomprimované gzipem (rozbalí je prohlížeč sám přes DecompressionStream).
-     Hra si stáhne jen 1–4 dlaždice kolem hráče z vlastního webu. Mimo ČR zůstávají záložní mapové servery. */
+     mapa/cr/9-X-Y.pmtiles (nastroje/mapa_cr.py + pmtiles_cr.py): 50 oblastí asi 50 × 50 km, každá je jeden soubor PMTiles v3
+     s dlaždicemi z14 (asi 2,4 × 2,4 km): cesty, domy (bloky), voda, řeky a body pro úkoly, binárně a zkomprimované gzipem.
+     Hra ze souboru čte jen potřebné kousky (HTTP Range), navštívené dlaždice si ukládá a celou oblast si může stáhnout
+     pro hraní bez signálu. Mimo ČR zůstávají záložní mapové servery. */
   var CZ_Z = 14, CZ_N = 16384, CZ_E = 1024, czCache = {};
   /* číselníky: musí sedět s nastroje/mapa_cr.py */
   var CZ_HW = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street", "service",
@@ -1287,18 +1288,125 @@
     if (typeof DecompressionStream === "undefined") return Promise.reject(new Error("prohlížeč neumí rozbalit mapu"));
     return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
   }
+  /* ---------- PMTiles v3 (https://github.com/protomaps/PMTiles/blob/main/spec/v3/spec.md) ----------
+     Hlavička a kořenový adresář leží v prvních 16 kB, dlaždice se hledají podle Hilbertova čísla.
+     Zdroj bajtů: stažená oblast v paměti prohlížeče, jinak HTTP Range ze sítě. */
+  var MAPA_C = "lovci-mapa", pmFiles = {};
+  function pmUrl(tx, ty) { return "mapa/cr/9-" + (tx >> 5) + "-" + (ty >> 5) + ".pmtiles"; }
+  function pmId(z, x, y) {
+    var acc = (Math.pow(4, z) - 1) / 3, s, rx, ry, t;
+    for (var a = z - 1; a >= 0; a--) {
+      s = 1 << a; rx = x & s ? 1 : 0; ry = y & s ? 1 : 0;
+      acc += s * s * ((3 * rx) ^ ry);
+      if (!ry) { if (rx) { x = s - 1 - x; y = s - 1 - y; } t = x; x = y; y = t; }
+    }
+    return acc;
+  }
+  function pmDir(buf) {
+    var u = new Uint8Array(buf), p = 0, i, last = 0;
+    function v() { var n = 0, m = 1, c; do { c = u[p++]; n += (c & 127) * m; m *= 128; } while (c & 128); return n; }
+    var n = v(), D = { id: new Array(n), rl: new Array(n), ln: new Array(n), of: new Array(n) };
+    for (i = 0; i < n; i++) { last += v(); D.id[i] = last; }
+    for (i = 0; i < n; i++) D.rl[i] = v();
+    for (i = 0; i < n; i++) D.ln[i] = v();
+    for (i = 0; i < n; i++) { var o = v(); D.of[i] = o === 0 && i > 0 ? D.of[i - 1] + D.ln[i - 1] : o - 1; }
+    return D;
+  }
+  function pmFind(D, id) {
+    var m = 0, n = D.id.length - 1, k;
+    while (m <= n) { k = (m + n) >> 1; if (id > D.id[k]) m = k + 1; else if (id < D.id[k]) n = k - 1; else return k; }
+    return n >= 0 && (D.rl[n] === 0 || id - D.id[n] < D.rl[n]) ? n : -1;
+  }
+  function pmFile(url) {
+    var F = pmFiles[url];
+    if (F) return F;
+    F = pmFiles[url] = { leaves: {} };
+    F.blob = (typeof caches === "undefined" ? Promise.resolve(null) : caches.open(MAPA_C).then(function (c) { return c.match(url); })
+      .then(function (r) { return r ? r.blob() : null; })).catch(function () { return null; });
+    return F;
+  }
+  function pmGet(url, off, len) {
+    var F = pmFile(url);
+    return F.blob.then(function (b) {
+      if (b) return b.slice(off, off + len).arrayBuffer();
+      return fetch(url, { headers: { Range: "bytes=" + off + "-" + (off + len - 1) }, cache: "no-cache" }).then(function (r) {
+        if (r.status === 206) return r.arrayBuffer();
+        if (r.ok) return r.blob().then(function (all) { F.blob = Promise.resolve(all); return all.slice(off, off + len).arrayBuffer(); }); /* server bez Range */
+        throw new Error("mapa " + r.status);
+      });
+    });
+  }
+  function pmHead(url) {
+    var F = pmFile(url);
+    return F.h || (F.h = pmGet(url, 0, 16384).then(function (a) {
+      var dv = new DataView(a);
+      if (dv.getUint8(0) !== 80 || dv.getUint8(7) !== 3) throw new Error("PMTiles: neznámý formát");
+      function u64(o) { return dv.getUint32(o, true) + dv.getUint32(o + 4, true) * 4294967296; }
+      var H = { ro: u64(8), rl: u64(16), lo: u64(40), to: u64(56), zip: dv.getUint8(97) === 2 };
+      var raw = a.slice(H.ro, H.ro + H.rl);
+      return (H.zip ? gunzip(raw) : Promise.resolve(raw)).then(function (d) { H.root = pmDir(d); return H; });
+    }));
+  }
+  /* bajty jedné dlaždice (gzip) nebo null, když v oblasti není */
+  function pmTile(url, z, x, y) {
+    var F = pmFile(url);
+    return pmHead(url).then(function (H) {
+      var id = pmId(z, x, y);
+      function look(D, depth) {
+        var i = pmFind(D, id);
+        if (i < 0) return null;
+        if (D.rl[i] > 0) return pmGet(url, H.to + D.of[i], D.ln[i]);
+        if (depth > 3) return null;
+        var key = D.of[i] + ":" + D.ln[i];
+        var L = F.leaves[key] || (F.leaves[key] = pmGet(url, H.lo + D.of[i], D.ln[i]).then(function (b) { return H.zip ? gunzip(b) : b; }).then(pmDir));
+        return L.then(function (D2) { return look(D2, depth + 1); });
+      }
+      return look(H.root, 0);
+    });
+  }
+  /* navštívené dlaždice si hra pamatuje, aby šlo hrát bez signálu tam, kde už byla */
+  function czCacheGet(key) {
+    if (typeof caches === "undefined") return Promise.resolve(null);
+    return caches.open(MAPA_C).then(function (c) { return c.match(key); }).then(function (r) { return r ? r.arrayBuffer() : null; }).catch(function () { return null; });
+  }
+  function czCachePut(key, buf) {
+    if (typeof caches === "undefined") return;
+    caches.open(MAPA_C).then(function (c) { return c.put(key, new Response(buf)); }).catch(function () {});
+  }
+  /* celá oblast (asi 50 × 50 km) kolem bodu do paměti prohlížeče pro hraní bez signálu; vrací počet bajtů */
+  function czStahniOblast(o) {
+    var g = czG(o.lat, o.lon), url = pmUrl(Math.floor(g.x / CZ_E), Math.floor(g.y / CZ_E));
+    if (typeof caches === "undefined") return Promise.reject(new Error("prohlížeč neumí ukládat"));
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+    return fetch(url, { cache: "no-cache" }).then(function (r) {
+      if (!r.ok) throw new Error("oblast není v mapě");
+      return r.blob();
+    }).then(function (b) {
+      var F = pmFile(url); F.blob = Promise.resolve(b);
+      return caches.open(MAPA_C).then(function (c) { return c.put(url, new Response(b)); }).then(function () { return b.size; });
+    });
+  }
+  window.lovciMapa = { stahniOblast: czStahniOblast }; /* zatím bez tlačítka; volá se z konzole a testů */
   /* jedna dlaždice: { st: "load"|"ok"|"none", d, pr } — chybějící (mimo ČR) se znovu nezkouší */
   function czTile(tx, ty) {
     var k = tx + "/" + ty, T = czCache[k];
     if (T) return T;
     T = czCache[k] = { st: "load" };
-    T.pr = fetch("mapa/14/" + k + ".bin").then(function (r) { if (!r.ok) throw new Error("mimo ČR"); return r.arrayBuffer(); }).then(gunzip)
+    var key = "mapa/_dlazdice/14/" + k, url = pmUrl(tx, ty);
+    T.pr = czCacheGet(key).then(function (hit) {
+      if (hit) return hit;
+      return pmTile(url, CZ_Z, tx, ty).then(function (gz) {
+        if (!gz) throw new Error("mimo ČR");
+        pmFile(url).blob.then(function (b) { if (!b) czCachePut(key, gz); });
+        return gz;
+      });
+    }).then(gunzip)
       .then(function (d) { T.d = czDecode(d); T.st = "ok"; mapDirty = true; return T.d; },
             function (e) { T.st = "none"; mapDirty = true; throw e; });
     T.pr.catch(function () {});
     return T;
   }
-  /* dlaždice z13 pokrývající čtverec ±m metrů kolem bodu */
+  /* dlaždice z14 pokrývající čtverec ±m metrů kolem bodu */
   function czTilesAround(o, m) {
     var a = czG(offset(o, m * 1.42, 315).lat, offset(o, m * 1.42, 315).lon), b = czG(offset(o, m * 1.42, 135).lat, offset(o, m * 1.42, 135).lon), out = [];
     for (var x = Math.floor(a.x / CZ_E); x <= Math.floor(b.x / CZ_E); x++) for (var y = Math.floor(a.y / CZ_E); y <= Math.floor(b.y / CZ_E); y++) out.push([x, y]);
@@ -1540,7 +1648,7 @@
   var TILE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png", tiles = {}, mapDirty = true, mapAt = 0, mapKey = "";
   var mapCv = document.createElement("canvas"); mapCv.className = "map"; mapCv.setAttribute("aria-hidden", "true");
   radar.insertBefore(mapCv, radar.firstChild);
-  var attr = document.createElement("div"); attr.className = "attr"; attr.textContent = "© OpenStreetMap"; radar.appendChild(attr);
+  var attr = document.createElement("div"); attr.className = "attr"; attr.textContent = "© OpenStreetMap contributors"; radar.appendChild(attr);
   function tileImg(z, x, y) {
     var n = 1 << z; x = ((x % n) + n) % n;
     var k = z + "/" + x + "/" + y;

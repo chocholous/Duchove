@@ -1,8 +1,9 @@
 /* Lovci duchů: práce bez signálu.
    Stránka: nejdřív ze sítě (ať je vždy nejnovější), bez sítě z paměti.
    Mapa (mapa/), duchové, ikony a písma: z paměti, když už tam jsou; jinak ze sítě a uložit.
-   Tak jde hrát i bez internetu všude, kde už jednou byla mapa načtená. */
-var V = "lovci-duchu-v1";
+   Mapa ČR (mapa/cr/*.pmtiles) jde mimo: hra z ní čte kousky přes HTTP Range a navštívené dlaždice i stažené
+   oblasti si ukládá sama do paměti "lovci-mapa", kterou tu nemažeme. */
+var V = "lovci-duchu-v2", MAPA = "lovci-mapa";
 var SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png",
   "duchove/pani.png", "duchove/mnich.png", "duchove/prosteradlo.png", "duchove/stin.png", "duchove/orby.png", "duchove/zombie.png", "duchove/klekanice.png"];
 self.addEventListener("install", function (e) {
@@ -10,7 +11,7 @@ self.addEventListener("install", function (e) {
   self.skipWaiting();
 });
 self.addEventListener("activate", function (e) {
-  e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== V; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); }));
+  e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== V && k !== MAPA; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); }));
 });
 function cacheFirst(req) {
   return caches.open(V).then(function (c) {
@@ -31,7 +32,8 @@ self.addEventListener("fetch", function (e) {
   var u = new URL(req.url);
   if (u.origin === location.origin) {
     if (req.mode === "navigate" || /\/(index\.html)?$/.test(u.pathname)) { e.respondWith(networkFirst(req)); return; }
-    if (/\/(mapa|duchove)\/|\.(png|webmanifest)$/.test(u.pathname)) { e.respondWith(cacheFirst(req)); return; }
+    if (/\.pmtiles$/.test(u.pathname)) return;
+    if (/\/duchove\/|\.(png|webmanifest)$/.test(u.pathname)) { e.respondWith(cacheFirst(req)); return; }
     return;
   }
   if (/fonts\.(googleapis|gstatic)\.com$/.test(u.hostname)) e.respondWith(cacheFirst(req));
