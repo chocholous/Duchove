@@ -1208,31 +1208,6 @@
     return { lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * Y))) * 180 / Math.PI, lon: X * 360 - 180 };
   }
   function inBox(els, B) { return els.filter(function (e) { return e.geometry.some(function (g) { return g.lat >= B.sw.lat && g.lat <= B.ne.lat && g.lon >= B.sw.lon && g.lon <= B.ne.lon; }); }); }
-  /* Vlastní mapa Prahy přímo v aplikaci (mapa/14/x/y.json, stažená skriptem nastroje/stahni_prahu.py): v Praze nepotřebuje žádný server */
-  function localStreets(o) {
-    var B = tilesAround(o);
-    return Promise.all(B.tiles.map(function (t) {
-      return fetch("mapa/14/" + t[0] + "/" + t[1] + ".json").then(function (r) { if (!r.ok) throw new Error("mimo Prahu"); return r.json(); })
-        .then(function (d) { return { t: t, d: d }; });
-    })).then(function (list) {
-      var els = [];
-      list.forEach(function (it) {
-        (it.d.w || []).forEach(function (w) {
-          var tags = { highway: w[0] }, fl = w[2] || "";
-          if (w[1]) tags.name = w[1];
-          if (fl.indexOf("b") >= 0) tags.bridge = "yes";
-          if (fl.indexOf("t") >= 0) tags.tunnel = "yes";
-          if (fl.indexOf("i") >= 0) tags.indoor = "yes";
-          if (fl.indexOf("a") >= 0) tags.access = "no";
-          if (w[3]) tags.service = w[3];
-          var g = [], f = w[4];
-          for (var i = 0; i + 1 < f.length; i += 2) g.push(tileToLL(B.n, it.t, it.d.e || 4096, [f[i], f[i + 1]]));
-          els.push({ type: "way", tags: tags, geometry: g });
-        });
-      });
-      return inBox(els, B);
-    });
-  }
   function ofmStreets(o) {
     var B = tilesAround(o), z = B.z, n = B.n, sw = B.sw, ne = B.ne, tiles = B.tiles;
     function load(tpl) {
@@ -1268,6 +1243,110 @@
         return inBox(els, B); /* jen okolí: kousky mimo výřez se zahodí */
       });
   }
+  /* ---------- Mapa celé ČR přímo v aplikaci ----------
+     mapa/13/x/y.json (nastroje/mapa_cr.py): cesty, domy, voda, řeky a body pro úkoly, dlaždice asi 4,8 × 4,8 km.
+     Hra si stáhne jen 1–4 dlaždice kolem hráče z vlastního webu. Mimo ČR zůstávají záložní mapové servery. */
+  var CZ_Z = 13, CZ_N = 8192, CZ_E = 4096, czCache = {};
+  function czG(lat, lon) {
+    var s = Math.sin(rad(clamp(lat, -85, 85)));
+    return { x: (lon + 180) / 360 * CZ_N * CZ_E, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * CZ_N * CZ_E };
+  }
+  function czLL(gx, gy) {
+    var X = gx / (CZ_N * CZ_E), Y = gy / (CZ_N * CZ_E);
+    return { lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * Y))) * 180 / Math.PI, lon: X * 360 - 180 };
+  }
+  function undelta(a) { var o = new Array(a.length), x = 0, y = 0; for (var i = 0; i + 1 < a.length; i += 2) { x += a[i]; y += a[i + 1]; o[i] = x; o[i + 1] = y; } return o; }
+  function czDecode(d) {
+    return { tx: d.x, ty: d.y, E: d.e || CZ_E,
+      w: (d.w || []).map(function (w) { return { hw: w[0], nm: w[1], fl: w[2] || "", svc: w[3] || "", c: undelta(w[4]) }; }),
+      b: (d.b || []).map(undelta), a: (d.a || []).map(function (a) { return { k: a[0], c: undelta(a[1]) }; }),
+      r: (d.r || []).map(function (r) { return { k: r[0], c: undelta(r[1]) }; }), p: d.p || [] };
+  }
+  /* jedna dlaždice: { st: "load"|"ok"|"none", d, pr } — chybějící (mimo ČR) se znovu nezkouší */
+  function czTile(tx, ty) {
+    var k = tx + "/" + ty, T = czCache[k];
+    if (T) return T;
+    T = czCache[k] = { st: "load" };
+    T.pr = fetch("mapa/13/" + k + ".json").then(function (r) { if (!r.ok) throw new Error("mimo ČR"); return r.json(); })
+      .then(function (d) { T.d = czDecode(d); T.st = "ok"; mapDirty = true; return T.d; },
+            function (e) { T.st = "none"; mapDirty = true; throw e; });
+    T.pr.catch(function () {});
+    return T;
+  }
+  /* dlaždice z13 pokrývající čtverec ±m metrů kolem bodu */
+  function czTilesAround(o, m) {
+    var a = czG(offset(o, m * 1.42, 315).lat, offset(o, m * 1.42, 315).lon), b = czG(offset(o, m * 1.42, 135).lat, offset(o, m * 1.42, 135).lon), out = [];
+    for (var x = Math.floor(a.x / CZ_E); x <= Math.floor(b.x / CZ_E); x++) for (var y = Math.floor(a.y / CZ_E); y <= Math.floor(b.y / CZ_E); y++) out.push([x, y]);
+    return out;
+  }
+  function czStreets(o) {
+    var B = tilesAround(o);
+    return Promise.all(czTilesAround(o, 130).map(function (t) { return czTile(t[0], t[1]).pr; })).then(function (list) {
+      var els = [];
+      list.forEach(function (T) {
+        var ox = T.tx * T.E, oy = T.ty * T.E;
+        T.w.forEach(function (w) {
+          var tags = { highway: w.hw }, fl = w.fl;
+          if (w.nm) tags.name = w.nm;
+          if (fl.indexOf("b") >= 0) tags.bridge = "yes";
+          if (fl.indexOf("t") >= 0) tags.tunnel = "yes";
+          if (fl.indexOf("i") >= 0) tags.indoor = "yes";
+          if (fl.indexOf("a") >= 0) tags.access = "no";
+          if (fl.indexOf("c") >= 0) tags.covered = "yes";
+          if (fl.indexOf("f") >= 0) tags.foot = "no";
+          if (fl.indexOf("F") >= 0) tags.foot = "yes";
+          if (w.svc) { if (w.hw === "footway") tags.footway = w.svc; else tags.service = w.svc; }
+          var g = [];
+          for (var i = 0; i + 1 < w.c.length; i += 2) g.push(czLL(ox + w.c[i], oy + w.c[i + 1]));
+          els.push({ type: "way", tags: tags, geometry: g });
+        });
+      });
+      return inBox(els, B);
+    });
+  }
+  /* body pro úkol po nálezu (lavička, lampa, hřiště…) do 25 m od ducha; null = data nejsou (mimo ČR) */
+  function czPois(g, R) {
+    var ts = czTilesAround(g, R);
+    return Promise.all(ts.map(function (t) { return czTile(t[0], t[1]).pr; })).then(function (list) {
+      var out = [];
+      list.forEach(function (T) { T.p.forEach(function (q) { var ll = czLL(T.tx * T.E + q[1], T.ty * T.E + q[2]), d = dist(g, ll); if (d <= R) out.push({ kind: q[0], d: d }); }); });
+      return out;
+    });
+  }
+  /* Kreslení radaru z vlastních dat: voda, řeky, domy, silnice a chodníky (Path2D se staví jednou na dlaždici) */
+  var MAJOR = /^(motorway|trunk|primary|secondary|tertiary)(_link)?$/, FOOTW = /^(footway|path|cycleway|steps|bridleway|track|pedestrian)$/;
+  function czPaths(T) {
+    if (T.P) return T.P;
+    var P = { water: new Path2D(), river: new Path2D(), stream: new Path2D(), bld: new Path2D(), minor: new Path2D(), major: new Path2D(), foot: new Path2D() };
+    function poly(p, c) { if (c.length < 6) return; p.moveTo(c[0], c[1]); for (var i = 2; i + 1 < c.length; i += 2) p.lineTo(c[i], c[i + 1]); p.closePath(); }
+    function line(p, c) { if (c.length < 4) return; p.moveTo(c[0], c[1]); for (var i = 2; i + 1 < c.length; i += 2) p.lineTo(c[i], c[i + 1]); }
+    T.a.forEach(function (a) { poly(P.water, a.c); });
+    T.r.forEach(function (r) { line(/^(river|canal)$/.test(r.k) ? P.river : P.stream, r.c); });
+    T.b.forEach(function (b) { poly(P.bld, b); });
+    T.w.forEach(function (w) { if (w.fl.indexOf("t") >= 0 || w.fl.indexOf("i") >= 0) return; line(MAJOR.test(w.hw) ? P.major : FOOTW.test(w.hw) ? P.foot : P.minor, w.c); });
+    return (T.P = P);
+  }
+  /* true = nakresleno z vlastních dat; false = data tu nejsou (mimo ČR), ať se použijí obrázkové dlaždice */
+  function drawMapVector(c, W, H, hdeg, pxPerM) {
+    var ts = czTilesAround(pos, M.scale * 1.6), loaded = [], missing = 0;
+    ts.forEach(function (t) { var T = czTile(t[0], t[1]); if (T.st === "ok") loaded.push(T.d); else if (T.st === "none") missing++; });
+    if (!loaded.length) return missing < ts.length; /* ještě se načítá: nic, ale ani obrázkové dlaždice */
+    var g = czG(pos.lat, pos.lon), mPerU = 40075016.686 * Math.cos(rad(pos.lat)) / (CZ_N * CZ_E), f = pxPerM * mPerU, u = function (m) { return m / mPerU; };
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H);
+    c.lineJoin = "round"; c.lineCap = "round";
+    loaded.forEach(function (T) {
+      var P = czPaths(T);
+      c.setTransform(1, 0, 0, 1, W / 2, H / 2); c.rotate(-rad(hdeg)); c.scale(f, f); c.translate(T.tx * T.E - g.x, T.ty * T.E - g.y);
+      c.fillStyle = "rgb(16,46,58)"; c.fill(P.water);
+      c.strokeStyle = "rgb(28,74,90)"; c.lineWidth = u(9); c.stroke(P.river); c.lineWidth = u(2.5); c.stroke(P.stream);
+      c.fillStyle = "rgb(58,46,33)"; c.fill(P.bld); c.strokeStyle = "rgb(92,74,52)"; c.lineWidth = u(0.6); c.stroke(P.bld);
+      c.strokeStyle = "rgb(96,140,121)"; c.lineWidth = u(1.8); c.setLineDash([u(3), u(2)]); c.stroke(P.foot); c.setLineDash([]);
+      c.strokeStyle = "rgb(112,160,138)"; c.lineWidth = u(6); c.stroke(P.minor);
+      c.strokeStyle = "rgb(160,140,96)"; c.lineWidth = u(10); c.stroke(P.major);
+    });
+    mapCv.classList.add("recolor");
+    return true;
+  }
   function osmWalkArea(o) {
     var t0 = performance.now(), fresh = cachedMap(o, 14 * 86400000);
     if (fresh) { mapInfo = { src: "z paměti", ms: performance.now() - t0 }; return Promise.resolve(parseWalkArea(o, fresh)); }
@@ -1283,7 +1362,7 @@
       mapInfo = { src: src, ms: performance.now() - t0 };
       return area;
     };
-    return localStreets(o).then(function (els) { return finish(els, "v aplikaci"); })
+    return czStreets(o).then(function (els) { return finish(els, "v aplikaci"); })
       .catch(function () { return ofmStreets(o).then(function (els) { return finish(els, "OpenFreeMap"); }); })
       .catch(function (e1) {
         lastNetErr = "OpenFreeMap: " + String(e1 && e1.message || e1).slice(0, 60);
@@ -1452,6 +1531,7 @@
     if (!W) return;
     if (mapCv.width !== W || mapCv.height !== H) { mapCv.width = W; mapCv.height = H; }
     var c = mapCv.getContext("2d"), pxPerM = 0.4 * W / M.scale, cosl = Math.cos(rad(pos.lat));
+    if (drawMapVector(c, W, H, hdeg, pxPerM)) return; /* vlastní data ČR; jinde obrázkové dlaždice OSM */
     var z = clamp(Math.round(Math.log(156543.03 * cosl * pxPerM) / Math.LN2), 3, 19), f = 156543.03 * cosl / Math.pow(2, z) * pxPerM;
     var n = Math.pow(2, z) * 256, gx = (pos.lon + 180) / 360 * n, la = rad(pos.lat), gy = (1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n;
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H);
@@ -1481,7 +1561,10 @@
     shelter: "Schovává se pod stříškou. Najdi ji a chvíli pod ní postůj.",
     information: "Je u cedule. Najdi ceduli a ukaž na ni.",
     gate: "Je u branky. Najdi branku a dotkni se jí.",
-    fountain: "Je u kašny. Najdi ji a poslouchej vodu."
+    fountain: "Je u kašny. Najdi ji a poslouchej vodu.",
+    cross: "Schovalo se u kříže u cesty. Najdi ho a tiše kolem něj projdi.",
+    shrine: "Je u boží muky. Najdi ji a pošeptej, co na ní vidíš.",
+    church: "Schovává se u kostela. Najdi ho a poslouchej, jestli nezvoní."
   };
   var CLUE_ANY = [
     "Najdi kámen a pošeptej mu: mám tě.",
@@ -1506,7 +1589,13 @@
     clues[i] = anyClue(CLUE_ANY);
     var q = "[out:json][timeout:8];(node(around:25," + g.lat.toFixed(6) + "," + g.lon.toFixed(6) + ")[~\"^(natural|amenity|highway|leisure|emergency|tourism|barrier)$\"~\"^(tree|bench|street_lamp|playground|picnic_table|waste_basket|post_box|fire_hydrant|drinking_water|bicycle_parking|shelter|information|gate|fountain)$\"];way(around:25," + g.lat.toFixed(6) + "," + g.lon.toFixed(6) + ")[leisure=playground];);out center tags;";
     var k = 0;
-    (function attempt() {
+    /* nejdřív body z vlastních dat ČR; Overpass jen tam, kde data nejsou */
+    czPois(g, 25).then(function (list) {
+      var best = null;
+      list.forEach(function (q) { if (!CLUE_OSM[q.kind]) return; var dd = q.d + (q.kind === "tree" ? 6 : 0); if (!best || dd < best.d) best = { d: dd, kind: q.kind }; });
+      if (best) clues[i] = CLUE_OSM[best.kind];
+    }).catch(function () { attempt(); });
+    function attempt() {
       if (k >= OVERPASS.length) return;
       var ac = window.AbortController ? new AbortController() : null, tm = setTimeout(function () { if (ac) ac.abort(); }, 7000);
       fetch(OVERPASS[k++] + "?data=" + encodeURIComponent(q), ac ? { signal: ac.signal } : {}).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (d) {
@@ -1520,7 +1609,7 @@
         });
         if (best) clues[i] = CLUE_OSM[best.kind];
       }).catch(function () { clearTimeout(tm); attempt(); });
-    })();
+    }
   }
 
 
@@ -3448,6 +3537,8 @@
     }).catch(function () {});
   } catch (e) {}
 
+  /* práce bez signálu: mapa, duchové a písma se ukládají do telefonu (sw.js) */
+  try { if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function () {}); } catch (e) {}
   frame(); callLoop(); heartLoop(); clickLoop(); vibeLoop(); beepLoop(); staticLoop(); tensionLoop(); spookLoop();
 })();
 </script>
